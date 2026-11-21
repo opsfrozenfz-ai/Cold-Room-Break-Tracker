@@ -1,0 +1,3159 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ระบบสแกนพักเบรกหนาว (Cold Room Break Tracker)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;600;700;800&family=Noto+Sans+Myanmar:wght@400;600;700&family=Prompt:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    /* =========================================================================
+       FROSTY DAYLIGHT & CLEAN GLASSMORPHISM LIGHT THEME
+       ========================================================================= */
+    :root {
+      color-scheme: light;
+    }
+    body {
+      font-family: 'Prompt', 'Noto Sans Myanmar', sans-serif;
+      background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 48%, #F1F5F9 100%);
+      color: #0F172A;
+      min-height: 100vh;
+    }
+    .font-mono-num {
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .glass-card {
+      background: rgba(255, 255, 255, 0.92);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(203, 213, 225, 0.85);
+    }
+    @keyframes pulseOverdue {
+      0%, 100% {
+        box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.35);
+        border-color: #DC2626;
+        background-color: #FEF2F2;
+      }
+      50% {
+        box-shadow: 0 0 0 8px rgba(220, 38, 38, 0);
+        border-color: #EF4444;
+        background-color: #FEE2E2;
+      }
+    }
+    @keyframes pulseWarning {
+      0%, 100% {
+        border-color: #F59E0B;
+        background-color: #FFFBEB;
+      }
+      50% {
+        border-color: #D97706;
+        background-color: #FEF3C7;
+      }
+    }
+    .card-overdue {
+      animation: pulseOverdue 1.5s infinite;
+    }
+    .card-warning {
+      animation: pulseWarning 2s infinite;
+    }
+    .tab-btn-active {
+      background: linear-gradient(135deg, #0284C7 0%, #0369A1 100%);
+      color: #FFFFFF;
+      border-color: #0369A1;
+      box-shadow: 0 6px 16px -4px rgba(2, 132, 199, 0.35);
+    }
+    .tab-btn-idle {
+      background: #FFFFFF;
+      color: #334155;
+      border-color: #CBD5E1;
+    }
+    .tab-btn-idle:hover {
+      background: #F0F9FF;
+      border-color: #7DD3FC;
+      color: #0369A1;
+    }
+    /* Custom Scrollbars */
+    ::-webkit-scrollbar { width: 7px; height: 7px; }
+    ::-webkit-scrollbar-track { background: #F1F5F9; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
+    /* Inline Print Fallback Styles */
+    @media print {
+      body > *:not(#inlinePrintArea) {
+        display: none !important;
+      }
+      #inlinePrintArea {
+        display: block !important;
+        position: static !important;
+        background: #FFFFFF !important;
+      }
+    }
+  </style>
+</head>
+<body class="antialiased selection:bg-sky-200 selection:text-sky-900">
+
+  <!-- ================= TOAST NOTIFICATION CONTAINER ================= -->
+  <div id="toastContainer" class="fixed top-4 right-4 z-[120] flex flex-col gap-2 max-w-sm w-full pointer-events-none px-2"></div>
+
+  <!-- ================= MAIN APPLICATION SHELL ================= -->
+  <div class="max-w-[1440px] mx-auto px-3 sm:px-5 py-4 space-y-4">
+
+    <!-- ================= TOP HEADER BAR ================= -->
+    <header class="glass-card rounded-2xl shadow-sm px-4 sm:px-6 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3.5">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-sky-500 to-blue-700 text-white flex items-center justify-center shadow-md shadow-sky-200 shrink-0">
+          <i class="fa-solid fa-snowflake text-2xl"></i>
+        </div>
+        <div>
+          <div class="flex flex-wrap items-center gap-2">
+            <h1 class="text-lg sm:text-xl font-extrabold text-slate-900 tracking-tight">
+              ระบบสแกนพักเบรกหนาว <span class="text-sky-700 font-bold">(Cold Room Break Tracker)</span>
+            </h1>
+            <span id="headerSyncBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+              <span class="w-2 h-2 rounded-full bg-slate-400"></span>
+              <span>โหมด Local (ยังไม่ได้ตั้งค่า Sheet)</span>
+            </span>
+          </div>
+          <p class="text-xs text-slate-500 mt-0.5">
+            คลังห้องเย็น -25°C • รองรับปืนยิง RF Code_128 • โควตากะ 8 ชม. (เบรกหนาว 120 น. + ทานข้าว 80 น. + OT 15 น./ชม.)
+          </p>
+        </div>
+      </div>
+
+      <!-- Right Live Clock & Quick Actions -->
+      <div class="flex flex-wrap items-center gap-3 ml-auto">
+        <div class="text-right pr-3 border-r border-slate-200">
+          <div id="liveDateText" class="text-[11px] font-semibold text-slate-500">กำลังโหลดวันที่...</div>
+          <div id="liveClockText" class="text-2xl sm:text-3xl font-extrabold font-mono-num text-slate-900 leading-none mt-0.5">00:00:00</div>
+        </div>
+
+        <button onclick="toggleSoundSetting()" id="btnHeaderSound"
+          class="px-3 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-bold flex items-center gap-1.5 transition shadow-xs">
+          <i id="headerSoundIcon" class="fa-solid fa-volume-high text-sky-600"></i>
+          <span id="headerSoundLabel" class="hidden sm:inline">เสียง: เปิด</span>
+        </button>
+
+        <button onclick="openTvMonitorWindow()"
+          class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-sm">
+          <i class="fa-solid fa-tv text-sky-400"></i>
+          <span>เปิดจอ TV (tv.html)</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- ================= 5 KPI SUMMARY CARDS ================= -->
+    <section class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-xs flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold text-slate-500 uppercase">กำลังพักทั้งหมด</p>
+          <p class="text-[11px] text-slate-400">လက်ရှိနားနေသူ</p>
+          <p id="kpiTotalActive" class="text-3xl font-extrabold font-mono-num text-slate-900 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 rounded-2xl bg-slate-100 text-slate-700 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-users"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-xs border-sky-200 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold text-sky-700 uppercase">สถานะปกติ</p>
+          <p class="text-[11px] text-sky-500">ပုံမှန်အချိန်</p>
+          <p id="kpiNormal" class="text-3xl font-extrabold font-mono-num text-sky-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 rounded-2xl bg-sky-50 text-sky-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-snowflake"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-xs border-amber-300 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold text-amber-700 uppercase">ใกล้หมดเวลา (&lt; 2 น.)</p>
+          <p class="text-[11px] text-amber-600">အချိန်ပြည့်ခါနီး</p>
+          <p id="kpiWarning" class="text-3xl font-extrabold font-mono-num text-amber-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-hourglass-half"></i>
+        </div>
+      </div>
+
+      <div class="glass-card rounded-2xl p-3.5 sm:p-4 shadow-xs border-red-300 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold text-red-700 uppercase">เกินเวลาพัก!</p>
+          <p class="text-[11px] text-red-500">အချိန်ကျော်လွန်</p>
+          <p id="kpiOverdue" class="text-3xl font-extrabold font-mono-num text-red-600 mt-1">0</p>
+        </div>
+        <div class="w-11 h-11 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-bell"></i>
+        </div>
+      </div>
+
+      <div class="col-span-2 sm:col-span-1 glass-card rounded-2xl p-3.5 sm:p-4 shadow-xs border-emerald-200 flex items-center justify-between">
+        <div>
+          <p class="text-[11px] font-bold text-emerald-700 uppercase">พักเสร็จวันนี้ / ตรงเวลา</p>
+          <p class="text-[11px] text-emerald-600">วันนี้รวมทุกรอบ</p>
+          <div class="flex items-baseline gap-2 mt-1">
+            <span id="kpiCompletedToday" class="text-2xl sm:text-3xl font-extrabold font-mono-num text-emerald-600">0</span>
+            <span id="kpiOnTimeRate" class="text-[11px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800">100%</span>
+          </div>
+        </div>
+        <div class="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-lg">
+          <i class="fa-solid fa-circle-check"></i>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================= 5 NAVIGATION TABS ================= -->
+    <nav class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
+      <button id="tabBtn-kiosk" onclick="switchTab('kiosk')" class="tab-btn-active border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-barcode"></i>
+        <span>1) จุดสแกน &amp; กระดานสด</span>
+      </button>
+      <button id="tabBtn-quota" onclick="switchTab('quota')" class="tab-btn-idle border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-chart-pie"></i>
+        <span>2) โควตารายบุคคล &amp; OT</span>
+      </button>
+      <button id="tabBtn-history" onclick="switchTab('history')" class="tab-btn-idle border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-clock-rotate-left"></i>
+        <span>3) ดูประวัติย้อนหลัง &amp; Excel</span>
+      </button>
+      <button id="tabBtn-backend" onclick="switchTab('backend')" class="tab-btn-idle border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-database"></i>
+        <span>4) Google Sheets &amp; ปิดยอด</span>
+      </button>
+      <button id="tabBtn-staff" onclick="switchTab('staff')" class="col-span-2 sm:col-span-1 tab-btn-idle border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition">
+        <i class="fa-solid fa-id-card"></i>
+        <span>5) พนักงาน &amp; พิมพ์ลาเบล</span>
+      </button>
+    </nav>
+
+    <!-- =======================================================================
+         TAB 1: KIOSK SCANNER & LIVE BREAK MONITOR
+         ======================================================================= -->
+    <main id="tabPanel-kiosk" class="space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+        <!-- LEFT 5 COLS: SCANNER KIOSK -->
+        <section class="lg:col-span-5 glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                <i class="fa-solid fa-qrcode text-sky-600"></i>
+                <span>จุดสแกนบัตรพนักงาน (RF Code_128 / PIN)</span>
+              </h2>
+              <p class="text-[11px] text-slate-500">ยิงปืนสแกน RF ได้ทันทีทุกหน้าจอ หรือกดรหัส PIN ด้านล่าง</p>
+            </div>
+            <span id="kioskSyncPill" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+              พร้อมสแกน
+            </span>
+          </div>
+
+          <!-- Break Mode Selector -->
+          <div class="space-y-1.5">
+            <label class="text-xs font-bold text-slate-600">เลือกประเภทการพักก่อนยิงสแกนเริ่มพัก:</label>
+            <div class="grid grid-cols-2 gap-2.5">
+              <button type="button" id="btnModeCold" onclick="setScanBreakType('COLD')"
+                class="p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-sky-50 border-sky-500 text-sky-900 shadow-xs">
+                <span class="text-2xl">❄️</span>
+                <div>
+                  <div class="text-xs sm:text-sm font-extrabold">พักเบรกหนาว</div>
+                  <div class="text-[11px] font-semibold opacity-80">15 นาที (โควตา 120 น.+OT)</div>
+                </div>
+              </button>
+              <button type="button" id="btnModeMeal" onclick="setScanBreakType('MEAL')"
+                class="p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-white border-slate-200 text-slate-700 hover:border-orange-300">
+                <span class="text-2xl">🍱</span>
+                <div>
+                  <div class="text-xs sm:text-sm font-extrabold">พักทานข้าว</div>
+                  <div class="text-[11px] font-semibold opacity-80">80 นาที (1 ชม. 20 น.)</div>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          <!-- Scanner Input Form -->
+          <form onsubmit="handleScanFormSubmit(event)" class="space-y-2.5">
+            <div class="relative">
+              <i class="fa-solid fa-barcode absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-lg"></i>
+              <input id="scanCodeInput" type="text" autocomplete="off"
+                placeholder="ยิงบาร์โค้ด Code_128 หรือพิมพ์รหัสพนักงาน / PIN..."
+                class="w-full pl-11 pr-24 py-3.5 rounded-xl border-2 border-sky-300 focus:border-sky-600 focus:ring-4 focus:ring-sky-100 bg-white text-base font-bold font-mono-num text-slate-900 outline-none transition" />
+              <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold shadow-xs transition">
+                ยืนยัน ↵
+              </button>
+            </div>
+          </form>
+
+          <!-- Bilingual Feedback Banner (Thai + Myanmar) -->
+          <div id="scanFeedbackBanner" class="hidden rounded-xl p-3.5 border-2 transition-all">
+            <div class="flex items-start justify-between gap-2">
+              <div class="space-y-0.5">
+                <div id="fbTitleTh" class="text-sm font-extrabold"></div>
+                <div id="fbTitleMm" class="text-xs font-semibold opacity-90"></div>
+                <div id="fbDetail" class="text-[11px] mt-1 font-medium"></div>
+              </div>
+              <button type="button" onclick="document.getElementById('scanFeedbackBanner').classList.add('hidden')" class="text-xs opacity-60 hover:opacity-100 px-1">✕</button>
+            </div>
+          </div>
+
+          <!-- Touch Numpad -->
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="appendNumpad('1')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">1</button>
+            <button type="button" onclick="appendNumpad('2')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">2</button>
+            <button type="button" onclick="appendNumpad('3')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">3</button>
+            <button type="button" onclick="appendNumpad('4')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">4</button>
+            <button type="button" onclick="appendNumpad('5')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">5</button>
+            <button type="button" onclick="appendNumpad('6')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">6</button>
+            <button type="button" onclick="appendNumpad('7')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">7</button>
+            <button type="button" onclick="appendNumpad('8')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">8</button>
+            <button type="button" onclick="appendNumpad('9')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">9</button>
+            <button type="button" onclick="clearNumpad()" class="py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-xs font-extrabold text-rose-700 active:scale-95 transition">ล้าง (C)</button>
+            <button type="button" onclick="appendNumpad('0')" class="py-2.5 rounded-xl bg-slate-50 hover:bg-sky-50 border border-slate-200 text-lg font-extrabold font-mono-num text-slate-800 active:scale-95 transition">0</button>
+            <button type="button" onclick="submitNumpad()" class="py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold active:scale-95 transition">ตกลง (OK)</button>
+          </div>
+
+          <!-- 1-Click Quick Scan Chips -->
+          <div class="pt-2 border-t border-slate-100 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold text-slate-600">ปุ่มสแกนด่วน (1-Click Staff Chips):</span>
+              <span class="text-[11px] text-slate-400">คลิกเพื่อสลับเข้า/ออกพัก</span>
+            </div>
+            <div id="quickScanChips" class="flex flex-wrap gap-1.5"></div>
+          </div>
+        </section>
+
+        <!-- RIGHT 7 COLS: LIVE ACTIVE BREAK BOARD -->
+        <section class="lg:col-span-7 glass-card rounded-2xl p-4 sm:p-5 shadow-sm min-h-[520px] flex flex-col">
+          <div class="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-sky-500 animate-pulse"></span>
+              <h2 class="text-base sm:text-lg font-extrabold text-slate-900">
+                กระดานนับเวลาถอยหลังผู้กำลังพักเบรก (Live Monitor)
+              </h2>
+            </div>
+            <span class="text-[11px] font-semibold text-slate-500">
+              เรียง: 🚨 เกินเวลา → ⏳ ใกล้หมดเวลา → ❄️ ปกติ
+            </span>
+          </div>
+
+          <div id="activeBreakBoard" class="grid grid-cols-1 md:grid-cols-2 gap-3.5 flex-1 content-start"></div>
+        </section>
+      </div>
+
+      <!-- BOTTOM: MINI DAILY QUOTA OVERVIEW ON KIOSK PAGE -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm">
+        <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <div>
+            <h3 class="text-sm sm:text-base font-extrabold text-slate-900">
+              📊 สรุปโควตาสะสมรายบุคคลประจำวันนี้ (อัปเดตเรียลไทม์)
+            </h3>
+            <p class="text-[11px] text-slate-500">
+              กะปกติ 8 ชม.: เบรกหนาว 120 นาที (ทำงาน 45 / พัก 15 × 8 รอบ) + พักทานข้าว 80 นาที = 200 นาที/วัน (มี OT +15 นาที/ชม.)
+            </p>
+          </div>
+          <button onclick="switchTab('quota')" class="px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-xs font-bold transition">
+            จัดการ OT &amp; ดูทั้งหมด →
+          </button>
+        </div>
+        <div id="kioskQuotaMiniGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"></div>
+      </section>
+    </main>
+
+    <!-- =======================================================================
+         TAB 2: INDIVIDUAL DAILY QUOTA & OT CALCULATOR
+         ======================================================================= -->
+    <main id="tabPanel-quota" class="hidden space-y-4">
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-calculator text-sky-600"></i>
+              <span>ตารางคำนวณโควตาพักเบรกรายบุคคล &amp; ชั่วโมง OT</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">
+              สูตรคำนวณ: เวลางานปกติ 8 ชม. (เบรกหนาว 15 น. × 8 = <strong>120 น.</strong>) + ทานข้าว <strong>80 น.</strong> = <strong>200 น./วัน</strong> • โอทีเพิ่ม <strong>+15 น./ชม.</strong>
+            </p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button onclick="setQuotaDateOffset(0)" class="px-2.5 py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-700 text-xs font-bold">วันนี้</button>
+            <button onclick="setQuotaDateOffset(-1)" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold">เมื่อวาน</button>
+            <button onclick="setQuotaDateOffset(-2)" class="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-xs font-bold">2 วันก่อน</button>
+            <input id="quotaDatePicker" type="date" onchange="renderQuotaTable()"
+              class="px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800" />
+          </div>
+        </div>
+
+        <div class="flex flex-wrap items-center justify-between gap-2 bg-slate-50 border border-slate-200 rounded-xl p-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="text-xs font-bold text-slate-700">ตั้งค่า OT ทั้งกะ:</span>
+            <button onclick="applyBulkOT(1)" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition">+1 ชม. OT ทั้งกะ</button>
+            <button onclick="applyBulkOT(2)" class="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition">+2 ชม. OT ทั้งกะ</button>
+            <button onclick="resetBulkOT()" class="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold transition">รีเซ็ต OT = 0</button>
+          </div>
+          <button onclick="exportQuotaCSV()" class="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition shadow-xs">
+            <i class="fa-solid fa-file-excel"></i>
+            <span>ส่งออกสรุปโควตา (.CSV)</span>
+          </button>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 uppercase text-[11px] font-extrabold">
+              <tr>
+                <th class="py-3 px-3">พนักงาน / โซน</th>
+                <th class="py-3 px-3 text-center">ชั่วโมง OT (วันนี้)</th>
+                <th class="py-3 px-3 text-center">เบรกหนาว (ใช้ / โควตา)</th>
+                <th class="py-3 px-3 text-center">ทานข้าว (ใช้ / โควตา)</th>
+                <th class="py-3 px-3 text-center">รวมสะสมทั้งวัน / โควตารวม</th>
+                <th class="py-3 px-3 text-right">คงเหลือ / สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="quotaTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- =======================================================================
+         TAB 3: HISTORICAL LOGS & EXCEL EXPORT
+         ======================================================================= -->
+    <main id="tabPanel-history" class="hidden space-y-4">
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-4">
+          <div>
+            <h2 class="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-clock-rotate-left text-sky-600"></i>
+              <span>ประวัติการสแกนเข้า-ออกย้อนหลัง &amp; ส่งออก Excel</span>
+            </h2>
+            <p class="text-xs text-slate-500 mt-0.5">ตรวจสอบรายการสแกนรายบรรทัด กรองตามวันที่ โซนห้องเย็น หรือสถานะตรงเวลา/เกินเวลา</p>
+          </div>
+          <button onclick="exportHistoryCSV()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+            <i class="fa-solid fa-file-csv"></i>
+            <span>ส่งออกประวัติที่กรอง (.CSV)</span>
+          </button>
+        </div>
+
+        <!-- Filters -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 bg-slate-50 p-3 rounded-xl border border-slate-200">
+          <div class="flex items-center gap-1.5">
+            <input id="historyDateFilter" type="date" onchange="renderHistoryTable()"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-800" />
+            <button onclick="clearHistoryDateFilter()" title="ดูรวมทุกวัน"
+              class="px-2.5 py-2 rounded-lg bg-white hover:bg-sky-50 border border-slate-300 text-xs font-bold text-sky-700 shrink-0">ทุกวัน</button>
+          </div>
+
+          <select id="historyZoneFilter" onchange="renderHistoryTable()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
+            <option value="ALL">ทุกโซนห้องเย็น</option>
+            <option value="Frozen -25°C">Frozen -25°C</option>
+            <option value="Blast Freeze -35°C">Blast Freeze -35°C</option>
+            <option value="Chiller 2°C">Chiller 2°C</option>
+            <option value="Loading Dock">Loading Dock</option>
+          </select>
+
+          <select id="historyTypeFilter" onchange="renderHistoryTable()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
+            <option value="ALL">ทุกประเภทการพัก</option>
+            <option value="COLD">❄️ พักเบรกหนาว (15 น.)</option>
+            <option value="MEAL">🍱 พักทานข้าว (80 น.)</option>
+          </select>
+
+          <select id="historyStatusFilter" onchange="renderHistoryTable()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
+            <option value="ALL">ทุกสถานะ</option>
+            <option value="ONTIME">✅ ตรงเวลา</option>
+            <option value="OVERTIME">🚨 เกินเวลา</option>
+          </select>
+
+          <input id="historySearchInput" type="text" oninput="renderHistoryTable()" placeholder="ค้นหารหัส / ชื่อพนักงาน..."
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-semibold text-slate-800" />
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 uppercase text-[11px] font-extrabold">
+              <tr>
+                <th class="py-3 px-3">วันที่</th>
+                <th class="py-3 px-3">รหัส / ชื่อพนักงาน</th>
+                <th class="py-3 px-3">โซน</th>
+                <th class="py-3 px-3">ประเภท</th>
+                <th class="py-3 px-3 text-center">เริ่มพัก</th>
+                <th class="py-3 px-3 text-center">กลับเข้า</th>
+                <th class="py-3 px-3 text-center">เวลาที่ใช้จริง</th>
+                <th class="py-3 px-3 text-right">สถานะ</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- =======================================================================
+         TAB 4: GOOGLE SHEETS BACKEND, MONTHLY AUTO-ARCHIVE & TV EXPORT
+         ======================================================================= -->
+    <main id="tabPanel-backend" class="hidden space-y-4">
+
+      <!-- Backend Overview Stats -->
+      <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div class="glass-card rounded-2xl p-4 shadow-xs">
+          <p class="text-[11px] font-bold text-slate-500">จำนวนพนักงานในระบบ</p>
+          <p id="statBackendEmp" class="text-2xl font-extrabold font-mono-num text-slate-900 mt-1">0 คน</p>
+        </div>
+        <div class="glass-card rounded-2xl p-4 shadow-xs">
+          <p class="text-[11px] font-bold text-slate-500">รายการประวัติสแกนสะสม</p>
+          <p id="statBackendLogs" class="text-2xl font-extrabold font-mono-num text-sky-700 mt-1">0 รายการ</p>
+        </div>
+        <div class="glass-card rounded-2xl p-4 shadow-xs">
+          <p class="text-[11px] font-bold text-slate-500">จำนวนวันที่มีข้อมูล</p>
+          <p id="statBackendDays" class="text-2xl font-extrabold font-mono-num text-indigo-700 mt-1">0 วัน</p>
+        </div>
+        <div class="glass-card rounded-2xl p-4 shadow-xs">
+          <p class="text-[11px] font-bold text-slate-500">สถานะซิงค์ Google Sheets</p>
+          <p id="statBackendSyncTime" class="text-sm font-extrabold text-emerald-700 mt-2">ยังไม่เชื่อมต่อ</p>
+        </div>
+      </section>
+
+      <!-- Google Sheets Integration Panel -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 border-sky-200">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-table text-emerald-600"></i>
+              <span>เชื่อมต่อฐานข้อมูล Google Sheets + Google Apps Script (Real-time Sync)</span>
+            </h2>
+            <p class="text-xs text-slate-500">รองรับการใช้งานร่วมกับ GitHub Pages และหน้าจอทีวีมอนิเตอร์ (tv.html) แบบซิงค์ข้อมูลชุดเดียวกัน</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="openAppsScriptModal()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+              <i class="fa-solid fa-code"></i>
+              <span>ดู &amp; คัดลอกโค้ด Code.gs</span>
+            </button>
+            <button onclick="downloadTvHtmlFile()" class="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+              <i class="fa-solid fa-tv text-sky-400"></i>
+              <span>ดาวน์โหลดไฟล์ tv.html</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+          <!-- Left Config Inputs -->
+          <div class="lg:col-span-7 space-y-3">
+            <div>
+              <label class="block text-xs font-bold text-slate-700 mb-1">Google Apps Script Web App URL (ลงท้ายด้วย /exec)</label>
+              <div class="flex gap-2">
+                <input id="gsUrlInput" type="url" placeholder="https://script.google.com/macros/s/.../exec"
+                  class="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-300 bg-white text-xs font-mono-num text-slate-800 focus:ring-2 focus:ring-sky-500 outline-none" />
+                <button onclick="saveGoogleSheetConfig()" class="px-4 py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold shrink-0 transition">
+                  บันทึก URL
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+                <input id="gsAutoSyncToggle" type="checkbox" onchange="saveGoogleSheetConfig(true)" class="mt-0.5 rounded text-sky-600" />
+                <div>
+                  <span class="block text-xs font-bold text-slate-800">ส่งเข้า Sheet อัตโนมัติทุกครั้งที่สแกน</span>
+                  <span class="block text-[11px] text-slate-500">อัปเดต Active_Breaks และ Break_Logs ทันที</span>
+                </div>
+              </label>
+
+              <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+                <label class="block text-xs font-bold text-slate-800 mb-1">โหมดเขียนแถวในชีท Break_Logs:</label>
+                <select id="gsLogModeSelect" onchange="saveGoogleSheetConfig(true)"
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-bold text-slate-700">
+                  <option value="ROLLING_LIMIT">โหมด 3: เก็บย้อนหลัง 30 วัน + รวมแถว START/END (แนะนำ)</option>
+                  <option value="TODAY_ONLY">โหมด 2: เก็บเฉพาะวันนี้ + รวมแถว START/END</option>
+                  <option value="OVERWRITE_BY_EMPLOYEE">โหมด 1: ซ้อนทับแถวเดิมรายบุคคล (1 คน = 1 แถว)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Sync Action Buttons -->
+          <div class="lg:col-span-5 bg-slate-50 border border-slate-200 rounded-xl p-3.5 space-y-2.5">
+            <div class="text-xs font-extrabold text-slate-700">คำสั่งซิงค์ข้อมูลด้วยตนเอง (Manual Sync):</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="testGoogleSheetConnection()" class="px-3 py-2 rounded-lg bg-white hover:bg-sky-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+                📡 ทดสอบเชื่อมต่อ (Ping)
+              </button>
+              <button onclick="pullDataFromGoogleSheet(false)" class="px-3 py-2 rounded-lg bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold transition">
+                ⬇️ ดึงข้อมูลจาก Sheet
+              </button>
+              <button onclick="pushLiveStateToGoogleSheet(true)" class="px-3 py-2 rounded-lg bg-white hover:bg-emerald-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+                ⚡ ซิงค์ Active_Breaks
+              </button>
+              <button onclick="syncEmployeesToGoogleSheet()" class="px-3 py-2 rounded-lg bg-white hover:bg-emerald-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+                👥 ส่งรายชื่อพนักงาน
+              </button>
+              <button onclick="syncAllLogsToGoogleSheet()" class="px-3 py-2 rounded-lg bg-white hover:bg-emerald-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+                📜 ส่งประวัติสแกนทั้งหมด
+              </button>
+              <button onclick="syncQuotaToGoogleSheet()" class="px-3 py-2 rounded-lg bg-white hover:bg-emerald-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+                📊 ส่งสรุปโควตาวันนี้
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Monthly Auto-Archive Panel -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4 border-indigo-200">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 class="text-base sm:text-lg font-extrabold text-slate-900 flex items-center gap-2">
+              <i class="fa-solid fa-box-archive text-indigo-600"></i>
+              <span>ระบบปิดยอดและบันทึกไฟล์แยกเดือนอัตโนมัติลง Google Drive (ก่อนล้างข้อมูลเก่า 30 วัน)</span>
+            </h2>
+            <p class="text-xs text-slate-500">
+              เมื่อถึงวันสิ้นเดือน ระบบจะสร้างไฟล์ <code class="bg-slate-100 px-1.5 py-0.5 rounded text-indigo-700 font-bold">ColdRoom_Break_Archive_YYYY-MM</code> ใน Google Drive เสมอ ก่อนล้างข้อมูลที่เก่ากว่า 30 วัน
+            </p>
+          </div>
+          <button onclick="triggerSetupMonthlyArchive()" class="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-xs transition">
+            <i class="fa-solid fa-clock"></i>
+            <span>เปิดระบบตั้งเวลาปิดยอดสิ้นเดือนอัตโนมัติ</span>
+          </button>
+        </div>
+
+        <div class="flex flex-wrap items-end gap-3 bg-indigo-50/60 border border-indigo-100 rounded-xl p-3.5">
+          <div>
+            <label class="block text-[11px] font-bold text-indigo-900 mb-1">เลือกเดือนที่ต้องการปิดยอด / ดาวน์โหลด:</label>
+            <input id="archiveMonthPicker" type="month" class="px-3 py-2 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-slate-800" />
+          </div>
+          <label class="flex items-center gap-2 px-3 py-2 rounded-lg bg-white border border-indigo-200 text-xs font-semibold text-slate-700 cursor-pointer">
+            <input id="chkCleanupAfterArchive" type="checkbox" checked class="rounded text-indigo-600" />
+            <span>ล้างข้อมูลเก่ากว่า 30 วันหลังบันทึกไฟล์สำเร็จ</span>
+          </label>
+          <button onclick="runManualMonthArchive()" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold transition shadow-xs">
+            💾 ปิดยอดลง Google Drive ทันที
+          </button>
+          <button onclick="downloadMonthlySummaryCSV()" class="px-4 py-2 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 text-xs font-bold transition">
+            📥 โหลดสรุปเดือนนี้ลงเครื่อง (.CSV)
+          </button>
+        </div>
+
+        <!-- Archive History Table -->
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 text-[11px] font-extrabold uppercase">
+              <tr>
+                <th class="py-2.5 px-3">เดือน (YYYY-MM)</th>
+                <th class="py-2.5 px-3">ชื่อไฟล์สำรองใน Google Drive</th>
+                <th class="py-2.5 px-3 text-center">จำนวนรายการ</th>
+                <th class="py-2.5 px-3">เวลาที่บันทึก</th>
+                <th class="py-2.5 px-3 text-right">ลิงก์ไฟล์</th>
+              </tr>
+            </thead>
+            <tbody id="archiveHistoryTableBody" class="divide-y divide-slate-100 bg-white">
+              <tr><td colspan="5" class="py-5 text-center text-slate-400">กด "ดึงข้อมูลจาก Sheet" หรือ "ปิดยอดลง Google Drive" เพื่อแสดงประวัติไฟล์สำรองรายเดือน</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- Daily Summary Table + Backup/Reset -->
+      <section class="glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+        <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+          <div>
+            <h2 class="text-base font-extrabold text-slate-900">📅 ตารางสรุปข้อมูลย้อนหลังรายวัน &amp; สำรองฐานข้อมูล</h2>
+            <p class="text-xs text-slate-500">สำรองฐานข้อมูลทั้งหมดเป็นไฟล์ .JSON หรือล้างข้อมูลเพื่อตั้งต้นระบบใหม่</p>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button onclick="exportFullDatabaseJSON()"
+              class="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-file-arrow-down"></i>
+              <span>สำรองฐานข้อมูล (.JSON)</span>
+            </button>
+            <label class="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 border border-slate-300 text-slate-700 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition">
+              <i class="fa-solid fa-file-arrow-up text-sky-600"></i>
+              <span>กู้คืนข้อมูล (Restore)</span>
+              <input type="file" accept=".json" onchange="importFullDatabaseJSON(event)" class="hidden" />
+            </label>
+            <button onclick="openResetModal()"
+              class="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-300 text-rose-700 text-xs font-bold flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-trash-can"></i>
+              <span>ล้างข้อมูล / ตั้งต้นใหม่</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto rounded-xl border border-slate-200">
+          <table class="w-full text-left border-collapse text-xs">
+            <thead class="bg-slate-100 text-slate-600 text-[11px] font-extrabold uppercase">
+              <tr>
+                <th class="py-2.5 px-3">วันที่</th>
+                <th class="py-2.5 px-3 text-center">จำนวนรอบสแกน</th>
+                <th class="py-2.5 px-3 text-center">รวมเบรกหนาว (นาที)</th>
+                <th class="py-2.5 px-3 text-center">รวมทานข้าว (นาที)</th>
+                <th class="py-2.5 px-3 text-center">ตรงเวลา / เกินเวลา</th>
+                <th class="py-2.5 px-3 text-right">ดูรายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody id="dailySummaryTableBody" class="divide-y divide-slate-100 bg-white"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <!-- =======================================================================
+         TAB 5: STAFF MANAGEMENT, BULK UPLOAD & CODE_128 LABEL PRINTING (80x50mm)
+         ======================================================================= -->
+    <main id="tabPanel-staff" class="hidden space-y-4">
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 items-start">
+
+        <!-- LEFT 4 COLS: BULK IMPORT & ADD NEW EMPLOYEE FORM -->
+        <section class="lg:col-span-4 space-y-4">
+
+          <!-- Bulk Upload CSV / JSON Box -->
+          <div class="glass-card rounded-2xl p-4 shadow-sm border-sky-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-file-import text-sky-600"></i>
+                <span>อัปโหลดไฟล์เพิ่มพนักงาน (CSV / JSON)</span>
+              </h3>
+              <button onclick="downloadStaffCsvTemplate()" class="text-[11px] font-bold text-sky-700 hover:underline">
+                โหลดไฟล์แม่แบบ .CSV
+              </button>
+            </div>
+            <p class="text-[11px] text-slate-500">
+              รองรับไฟล์จาก Excel (.CSV UTF-8), .TXT หรือ .JSON เพื่อสร้างรายชื่อและบาร์โค้ด <strong>Code_128</strong> พร้อมกันทั้งหมด
+            </p>
+            <label class="flex flex-col items-center justify-center p-4 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50/50 hover:bg-sky-50 cursor-pointer transition text-center">
+              <i class="fa-solid fa-cloud-arrow-up text-2xl text-sky-600 mb-1"></i>
+              <span class="text-xs font-extrabold text-sky-900">คลิกเลือกไฟล์พนักงาน (.CSV / .TXT / .JSON)</span>
+              <span class="text-[10px] text-slate-500 mt-0.5">คอลัมน์: EMP_ID, PIN, FULL_NAME, NICKNAME, MYANMAR_NAME, NATION, COLD_ZONE, ROLE, OT_HOURS</span>
+              <input type="file" accept=".csv,.txt,.json" onchange="handleStaffFileUpload(event)" class="hidden" />
+            </label>
+          </div>
+
+          <!-- Manual Add Staff Form -->
+          <form onsubmit="handleAddStaffSubmit(event)" class="glass-card rounded-2xl p-4 shadow-sm space-y-3">
+            <h3 class="text-sm font-extrabold text-slate-900 flex items-center gap-1.5 border-b border-slate-100 pb-2">
+              <i class="fa-solid fa-user-plus text-emerald-600"></i>
+              <span>เพิ่มพนักงานห้องเย็นใหม่ (รายคน)</span>
+            </h3>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">รหัสพนักงาน (Code_128)*</label>
+                <input id="newEmpId" type="text" required placeholder="เช่น TH060890"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold font-mono-num uppercase" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">รหัส PIN (สำหรับกดจอ)</label>
+                <input id="newEmpPin" type="text" placeholder="เช่น 1001"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold font-mono-num" />
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-[11px] font-bold text-slate-600 mb-1">ชื่อ-นามสกุล*</label>
+              <input id="newEmpName" type="text" required placeholder="เช่น พิลาวรรณ ทับทิม"
+                class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold" />
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">ชื่อเล่น</label>
+                <input id="newEmpNick" type="text" placeholder="เช่น อ้อม"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold" />
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">ชื่อภาษาเมียนมา</label>
+                <input id="newEmpMyanmar" type="text" placeholder="เช่น အောင်"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold" />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-2.5">
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">โซนห้องเย็น</label>
+                <select id="newEmpZone" class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-bold">
+                  <option value="Frozen -25°C">Frozen -25°C</option>
+                  <option value="Blast Freeze -35°C">Blast Freeze -35°C</option>
+                  <option value="Chiller 2°C">Chiller 2°C</option>
+                  <option value="Loading Dock">Loading Dock</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-[11px] font-bold text-slate-600 mb-1">ตำแหน่ง / สัญชาติ</label>
+                <input id="newEmpRole" type="text" value="Picker" placeholder="Picker / Forklift"
+                  class="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold" />
+              </div>
+            </div>
+
+            <button type="submit" class="w-full py-2.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-extrabold shadow-xs transition">
+              + บันทึกและสร้างบัตรบาร์โค้ด Code_128
+            </button>
+          </form>
+        </section>
+
+        <!-- RIGHT 8 COLS: STAFF CARDS & BARCODE PRINT CENTER -->
+        <section class="lg:col-span-8 glass-card rounded-2xl p-4 sm:p-5 shadow-sm space-y-4">
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <div>
+              <h2 class="text-base sm:text-lg font-extrabold text-slate-900">
+                รายชื่อพนักงาน &amp; บัตรบาร์โค้ด Code_128 (<span id="staffTotalCount">0</span> คน)
+              </h2>
+              <p class="text-[11px] text-slate-500">บาร์โค้ดมาตรฐาน ISO/IEC 15417 (Code_128B) สำหรับเครื่องยิง RF Scanner และพิมพ์ลาเบล 80×50mm</p>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button onclick="openPrintPreviewModal('ALL', 'LABEL_80X50')"
+                class="px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                <i class="fa-solid fa-tag"></i>
+                <span>พิมพ์ลาเบล 80×50mm (ทั้งหมด)</span>
+              </button>
+              <button onclick="openPrintPreviewModal('ALL', 'A4')"
+                class="px-3.5 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition">
+                <i class="fa-solid fa-print"></i>
+                <span>พิมพ์กระดาษ A4 (ทั้งหมด)</span>
+              </button>
+              <button onclick="openResetModal()"
+                class="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-bold flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-rotate-left"></i>
+                <span>ล้างข้อมูลตั้งต้นใหม่</span>
+              </button>
+            </div>
+          </div>
+
+          <div id="staffCardsGrid" class="grid grid-cols-1 md:grid-cols-2 gap-3.5"></div>
+        </section>
+      </div>
+    </main>
+
+  </div>
+
+  <!-- =========================================================================
+       MODAL 1: PRINT PREVIEW (LABEL 80x50mm / A4)
+       ========================================================================= -->
+  <div id="printPreviewModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-[90] p-3 sm:p-5">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 class="text-sm sm:text-base font-extrabold text-slate-900">🖨️ ตัวอย่างการพิมพ์บัตรบาร์โค้ด Code_128</h3>
+          <p id="printPreviewSubtitle" class="text-[11px] text-slate-500">ขนาดสติกเกอร์ลาเบล 80mm × 50mm (1 ดวงต่อ 1 แผ่น ไร้ขอบ)</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btnSwitchLabel80" onclick="switchPrintMode('LABEL_80X50')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white">ลาเบล 80×50mm</button>
+          <button id="btnSwitchA4" onclick="switchPrintMode('A4')" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 text-slate-700">กระดาษ A4</button>
+          <button onclick="executeRealPrint()" class="px-4 py-1.5 rounded-lg text-xs font-extrabold bg-sky-600 hover:bg-sky-700 text-white shadow-xs">
+            <i class="fa-solid fa-print mr-1"></i>สั่งพิมพ์จริงทันที
+          </button>
+          <button onclick="downloadPrintableHtmlFile()" class="px-3 py-1.5 rounded-lg text-xs font-bold bg-slate-900 hover:bg-slate-800 text-white">
+            โหลดไฟล์ .HTML
+          </button>
+          <button onclick="closePrintPreviewModal()" class="w-8 h-8 rounded-lg hover:bg-slate-200 text-slate-600 font-bold">✕</button>
+        </div>
+      </div>
+      <div id="printPreviewBody" class="p-5 overflow-y-auto bg-slate-100 flex-1 flex flex-wrap justify-center gap-4"></div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: GOOGLE APPS SCRIPT (Code.gs) GUIDE & COPY
+       ========================================================================= -->
+  <div id="appsScriptModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-[90] p-3 sm:p-5">
+    <div class="bg-white rounded-2xl max-w-4xl w-full max-h-[90vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-3.5 border-b border-slate-200 bg-indigo-50 flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 class="text-sm sm:text-base font-extrabold text-indigo-950">📜 โค้ดหลังบ้าน Google Apps Script (Code.gs) ฉบับสมบูรณ์</h3>
+          <p class="text-[11px] text-indigo-700">วางใน Google Sheets → ส่วนขยาย → Apps Script → บันทึก → Deploy เป็น Web App (สิทธิ์: ทุกคน / Anyone)</p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button onclick="copyAppsScriptCode()" class="px-3.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold">
+            <i class="fa-solid fa-copy mr-1"></i>คัดลอกโค้ดทั้งหมด
+          </button>
+          <button onclick="downloadAppsScriptFile()" class="px-3 py-1.5 rounded-lg bg-white border border-indigo-200 text-indigo-800 text-xs font-bold">
+            โหลดไฟล์ Code.gs
+          </button>
+          <button onclick="closeAppsScriptModal()" class="w-8 h-8 rounded-lg hover:bg-indigo-100 text-indigo-800 font-bold">✕</button>
+        </div>
+      </div>
+      <div class="p-4 overflow-y-auto flex-1 bg-slate-950">
+        <pre id="appsScriptCodeDisplay" class="text-[11px] font-mono-num text-emerald-300 whitespace-pre-wrap leading-relaxed"></pre>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 3: RESET / CLEAR DATA
+       ========================================================================= -->
+  <div id="resetDataModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm hidden items-center justify-center z-[95] p-3 sm:p-5">
+    <div class="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-200 overflow-hidden">
+      <div class="px-5 py-4 border-b border-rose-100 bg-rose-50/70 flex items-center justify-between">
+        <div>
+          <h3 class="text-base font-extrabold text-rose-900 flex items-center gap-2">
+            <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+            <span>ล้างข้อมูลเพื่อตั้งต้นระบบใหม่ (Reset Data)</span>
+          </h3>
+          <p class="text-[11px] text-rose-700 mt-0.5">ลิงก์ Google Sheets Web App URL และการตั้งค่าระบบจะยังคงอยู่ไม่ถูกลบ</p>
+        </div>
+        <button onclick="closeResetModal()" class="w-8 h-8 rounded-lg hover:bg-rose-100 text-rose-700 font-bold">✕</button>
+      </div>
+
+      <div class="p-5 space-y-4">
+        <label class="flex items-start gap-2.5 p-3 rounded-xl bg-slate-50 border border-slate-200 cursor-pointer">
+          <input type="checkbox" id="chkResetSyncSheet" class="mt-0.5 rounded text-rose-600" />
+          <div>
+            <span class="block text-xs font-bold text-slate-800">ส่งคำสั่งล้างแถวข้อมูลใน Google Sheets ไปพร้อมกันด้วย</span>
+            <span class="block text-[11px] text-slate-500">ล้างข้อมูลตั้งแต่แถวที่ 2 ลงมา (คงหัวตารางและประวัติไฟล์สำรอง Archive_History ไว้)</span>
+          </div>
+        </label>
+
+        <div class="space-y-2.5">
+          <button onclick="executeResetData('LOGS_ONLY')"
+            class="w-full p-3.5 rounded-xl border-2 border-amber-200 bg-amber-50/60 hover:bg-amber-100/70 text-left transition flex items-center justify-between gap-3">
+            <div>
+              <div class="text-xs sm:text-sm font-extrabold text-amber-950">1. ล้างเฉพาะประวัติสแกน, กำลังพัก และ OT</div>
+              <div class="text-[11px] text-amber-800">เก็บรายชื่อพนักงานและบาร์โค้ด Code_128 ไว้ครบเหมือนเดิม</div>
+            </div>
+            <i class="fa-solid fa-broom text-amber-600 text-lg shrink-0"></i>
+          </button>
+
+          <button onclick="executeResetData('ALL')"
+            class="w-full p-3.5 rounded-xl border-2 border-rose-300 bg-rose-50 hover:bg-rose-100 text-left transition flex items-center justify-between gap-3">
+            <div>
+              <div class="text-xs sm:text-sm font-extrabold text-rose-950">2. ล้างข้อมูลทั้งหมด 100% (เริ่มตั้งต้นใหม่จาก 0)</div>
+              <div class="text-[11px] text-rose-800">ลบรายชื่อพนักงาน + กำลังพัก + ประวัติสแกน + OT ทั้งหมด</div>
+            </div>
+            <i class="fa-solid fa-trash-can text-rose-600 text-lg shrink-0"></i>
+          </button>
+        </div>
+      </div>
+
+      <div class="px-5 py-3 border-t border-slate-200 bg-slate-50 flex justify-end">
+        <button onclick="closeResetModal()" class="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold">
+          ยกเลิก
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Inline Print Fallback Area -->
+  <div id="inlinePrintArea" class="hidden"></div>
+
+  <!-- =========================================================================
+       APPLICATION JAVASCRIPT (CLEAN FULL REBUILD - ZERO SAMPLE DATA)
+       ========================================================================= -->
+  <script>
+    /**************************************************************************
+     * 0. GOOGLE SHEETS DEFAULT URL (สำหรับฝังลงโค้ดก่อนอัปขึ้น GitHub Pages)
+     **************************************************************************/
+    const DEFAULT_GOOGLE_SCRIPT_URL = "";
+    const AUTO_PULL_GOOGLE_SHEETS_MS = 15000;
+    const GSHEET_FETCH_TIMEOUT_MS = 12000;
+
+    /**************************************************************************
+     * 1. QUOTA CONSTANTS & STORAGE KEYS
+     **************************************************************************/
+    const QUOTA_RULES = {
+      SHIFT_HOURS: 8,
+      COLD_BREAK_MINS: 15,
+      COLD_BASE_QUOTA_MINS: 120, // 8 ชม. (ทำงาน 45 / พัก 15 × 8 รอบ)
+      MEAL_BREAK_MINS: 80,       // 1 ชม. 20 นาที
+      OT_BONUS_MINS_PER_HOUR: 15 // โอที 1 ชม. ได้เบรกหนาวเพิ่ม 15 นาที
+    };
+
+    const STORAGE_KEY_STATE = 'CR_APP_STATE_V5_CLEAN';
+    const STORAGE_KEY_GS_URL = 'CR_GS_URL';
+    const STORAGE_KEY_GS_AUTO = 'CR_GS_AUTO_SYNC';
+    const STORAGE_KEY_GS_MODE = 'CR_GS_LOG_MODE';
+
+    /**************************************************************************
+     * 2. APPLICATION STATE (CLEAN EMPTY INITIALIZATION - NO SAMPLE DATA)
+     **************************************************************************/
+    let appState = {
+      employees: [],
+      activeBreaks: [],
+      historyLogs: [],
+      dailyOtByDate: {},
+      archiveHistory: [],
+      settings: {
+        soundEnabled: true,
+        googleSheetWebAppUrl: '',
+        googleSheetAutoSync: true,
+        googleSheetLogMode: 'ROLLING_LIMIT'
+      }
+    };
+
+    let currentTab = 'kiosk';
+    let selectedBreakType = 'COLD';
+    let alertedOverdueKeys = new Set();
+    let printModalTarget = 'ALL';
+    let printModalMode = 'LABEL_80X50';
+
+    // Sync Queue & Concurrency Guards
+    let gsSyncQueue = [];
+    let isProcessingGsQueue = false;
+    let isPullingFromGoogleSheet = false;
+    let lastPushTimestampMs = 0;
+    let lastPulledSignature = '';
+
+    // RF Scanner Global Keyboard Wedge Buffer
+    let rfBuffer = '';
+    let rfLastKeyTime = 0;
+
+    /**************************************************************************
+     * 3. DATE, TIME & HELPER UTILITIES
+     **************************************************************************/
+    function getRelativeDateKey(offsetDays = 0) {
+      const d = new Date();
+      d.setDate(d.getDate() + offsetDays);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    }
+
+    function getCurrentMonthKey() {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    }
+
+    function formatTimeHMS(dateObj) {
+      const d = dateObj instanceof Date ? dateObj : new Date(dateObj);
+      return d.toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    }
+
+    function formatMMSS(totalSeconds) {
+      const abs = Math.abs(Math.floor(totalSeconds));
+      const m = Math.floor(abs / 60);
+      const s = abs % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function escapeHtml(str) {
+      return String(str ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toastContainer');
+      if (!container) return;
+      const colors = {
+        success: 'bg-emerald-600 text-white border-emerald-700',
+        error: 'bg-rose-600 text-white border-rose-700',
+        warning: 'bg-amber-500 text-white border-amber-600',
+        info: 'bg-slate-900 text-white border-slate-700'
+      };
+      const icons = {
+        success: 'fa-circle-check',
+        error: 'fa-circle-exclamation',
+        warning: 'fa-triangle-exclamation',
+        info: 'fa-circle-info'
+      };
+      const el = document.createElement('div');
+      el.className = `pointer-events-auto px-4 py-3 rounded-xl border shadow-lg text-xs font-bold flex items-center gap-2.5 transition-all duration-300 ${colors[type] || colors.info}`;
+      el.innerHTML = `<i class="fa-solid ${icons[type] || icons.info} text-sm shrink-0"></i><span class="leading-snug">${escapeHtml(message)}</span>`;
+      container.appendChild(el);
+      setTimeout(() => {
+        el.style.opacity = '0';
+        el.style.transform = 'translateX(16px)';
+        setTimeout(() => el.remove(), 300);
+      }, 3600);
+    }
+
+    function playSound(kind = 'start') {
+      if (!appState.settings.soundEnabled) return;
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+        const ctx = new AudioCtx();
+        const playTone = (freq, startOffset, duration, wave = 'sine', vol = 0.14) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = wave;
+          osc.frequency.setValueAtTime(freq, ctx.currentTime + startOffset);
+          gain.gain.setValueAtTime(vol, ctx.currentTime + startOffset);
+          gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + startOffset + duration);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(ctx.currentTime + startOffset);
+          osc.stop(ctx.currentTime + startOffset + duration);
+        };
+        if (kind === 'start') {
+          playTone(660, 0, 0.12);
+          playTone(880, 0.12, 0.16);
+        } else if (kind === 'end') {
+          playTone(587, 0, 0.1);
+          playTone(880, 0.1, 0.1);
+          playTone(1046, 0.2, 0.18);
+        } else if (kind === 'error') {
+          playTone(240, 0, 0.22, 'sawtooth', 0.12);
+        } else if (kind === 'overdue') {
+          playTone(920, 0, 0.15, 'square', 0.1);
+          playTone(920, 0.2, 0.15, 'square', 0.1);
+        }
+      } catch (e) {}
+    }
+
+    /**************************************************************************
+     * 4. PERSISTENCE & RESET MANAGEMENT
+     **************************************************************************/
+    function getGoogleSheetUrl() {
+      const saved = (localStorage.getItem(STORAGE_KEY_GS_URL) || '').trim();
+      return saved || (DEFAULT_GOOGLE_SCRIPT_URL || '').trim();
+    }
+
+    function isGoogleSheetAutoSyncEnabled() {
+      const raw = localStorage.getItem(STORAGE_KEY_GS_AUTO);
+      if (raw === null) return true;
+      return raw === 'true';
+    }
+
+    function getGoogleSheetLogMode() {
+      return localStorage.getItem(STORAGE_KEY_GS_MODE) || 'ROLLING_LIMIT';
+    }
+
+    function buildEmptyState() {
+      appState.employees = [];
+      appState.activeBreaks = [];
+      appState.historyLogs = [];
+      appState.dailyOtByDate = {};
+      alertedOverdueKeys.clear();
+    }
+
+    function loadSavedState() {
+      // ลบคีย์ตัวอย่างเก่าทิ้งหากยังหลงเหลือ เพื่อให้ตั้งต้นใหม่สะอาดจริง
+      try {
+        localStorage.removeItem('CR_APP_STATE_V2');
+        localStorage.removeItem('CR_APP_STATE_V3');
+        localStorage.removeItem('CR_APP_STATE_V4_CLEAN');
+      } catch (e) {}
+
+      appState.settings.googleSheetWebAppUrl = getGoogleSheetUrl();
+      appState.settings.googleSheetAutoSync = isGoogleSheetAutoSyncEnabled();
+      appState.settings.googleSheetLogMode = getGoogleSheetLogMode();
+
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY_STATE);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed && Array.isArray(parsed.employees)) {
+            appState.employees = parsed.employees;
+            appState.activeBreaks = Array.isArray(parsed.activeBreaks) ? parsed.activeBreaks : [];
+            appState.historyLogs = Array.isArray(parsed.historyLogs) ? parsed.historyLogs : [];
+            appState.dailyOtByDate = parsed.dailyOtByDate || {};
+            appState.archiveHistory = Array.isArray(parsed.archiveHistory) ? parsed.archiveHistory : [];
+            appState.settings.soundEnabled = parsed.settings?.soundEnabled !== false;
+            return true;
+          }
+        }
+      } catch (e) {
+        console.warn('Load state skipped:', e);
+      }
+      return false;
+    }
+
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY_STATE, JSON.stringify(appState));
+        // บันทึกคีย์กลางเพื่อให้ tv.html ที่เปิดเครื่องเดียวกันซิงค์ทันที
+        localStorage.setItem('CR_EMPLOYEES', JSON.stringify(appState.employees));
+        localStorage.setItem('CR_ACTIVE_BREAKS', JSON.stringify(appState.activeBreaks));
+        localStorage.setItem('CR_BREAK_LOGS', JSON.stringify(appState.historyLogs));
+        localStorage.setItem('CR_DAILY_OT', JSON.stringify(appState.dailyOtByDate));
+      } catch (e) {
+        console.warn('Save state warning:', e);
+      }
+    }
+
+    function openResetModal() {
+      const modal = document.getElementById('resetDataModal');
+      const chk = document.getElementById('chkResetSyncSheet');
+      const hasUrl = Boolean(getGoogleSheetUrl() && getGoogleSheetUrl().includes('/exec'));
+      if (chk) {
+        chk.checked = false;
+        chk.disabled = !hasUrl;
+      }
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeResetModal() {
+      const modal = document.getElementById('resetDataModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function executeResetData(mode) {
+      const syncClearSheet = Boolean(document.getElementById('chkResetSyncSheet')?.checked);
+      const clearEmployees = mode === 'ALL';
+
+      if (clearEmployees) {
+        buildEmptyState();
+      } else {
+        appState.activeBreaks = [];
+        appState.historyLogs = [];
+        appState.dailyOtByDate = {};
+        appState.employees.forEach((emp) => { emp.otHours = 0; });
+        alertedOverdueKeys.clear();
+      }
+
+      document.getElementById('scanFeedbackBanner')?.classList.add('hidden');
+      lastPulledSignature = '';
+      saveState();
+      renderAll();
+      closeResetModal();
+
+      if (syncClearSheet && getGoogleSheetUrl().includes('/exec')) {
+        enqueueGoogleSheetSync({ action: 'CLEAR_SHEET_DATA', clearEmployees }, true);
+      }
+
+      showToast(
+        clearEmployees
+          ? 'ล้างข้อมูลทั้งหมดเป็น 0 เรียบร้อยแล้ว พร้อมตั้งต้นระบบใหม่!'
+          : 'ล้างประวัติสแกน กำลังพัก และ OT เรียบร้อยแล้ว (คงรายชื่อพนักงานไว้)',
+        'success'
+      );
+    }
+
+    /**************************************************************************
+     * 5. INDIVIDUAL DAILY QUOTA CALCULATOR (8 HR SHIFT + 80m MEAL + OT)
+     **************************************************************************/
+    function getEmployeeOtForDate(empId, dateKey) {
+      const key = `${dateKey}_${empId}`;
+      if (appState.dailyOtByDate[key] !== undefined) {
+        return Number(appState.dailyOtByDate[key]) || 0;
+      }
+      const emp = appState.employees.find((e) => e.id === empId);
+      return Number(emp?.otHours) || 0;
+    }
+
+    function calculateEmployeeQuota(emp, dateKey) {
+      const todayKey = getRelativeDateKey(0);
+      const otHours = getEmployeeOtForDate(emp.id, dateKey);
+      const coldQuotaMins = QUOTA_RULES.COLD_BASE_QUOTA_MINS + (otHours * QUOTA_RULES.OT_BONUS_MINS_PER_HOUR);
+      const mealQuotaMins = QUOTA_RULES.MEAL_BREAK_MINS;
+      const totalQuotaMins = coldQuotaMins + mealQuotaMins;
+
+      let coldUsedSec = 0;
+      let mealUsedSec = 0;
+      let coldRounds = 0;
+      let mealRounds = 0;
+
+      appState.historyLogs.forEach((log) => {
+        if (log.empId === emp.id && log.dateKey === dateKey) {
+          const sec = Number(log.durationSec) || ((Number(log.durationMins) || 0) * 60);
+          if (log.breakType === 'MEAL' || log.breakType === 'meal') {
+            mealUsedSec += sec;
+            mealRounds++;
+          } else {
+            coldUsedSec += sec;
+            coldRounds++;
+          }
+        }
+      });
+
+      // รวมเวลาคนที่กำลังพักอยู่แบบเรียลไทม์ (เฉพาะวันที่เป็นวันนี้)
+      if (dateKey === todayKey) {
+        const active = appState.activeBreaks.find((a) => a.empId === emp.id);
+        if (active) {
+          const elapsedSec = Math.max(0, Math.floor((Date.now() - Number(active.startTimestamp)) / 1000));
+          if (active.breakType === 'MEAL' || active.breakType === 'meal') {
+            mealUsedSec += elapsedSec;
+            mealRounds++;
+          } else {
+            coldUsedSec += elapsedSec;
+            coldRounds++;
+          }
+        }
+      }
+
+      const coldUsedMins = Math.round(coldUsedSec / 60);
+      const mealUsedMins = Math.round(mealUsedSec / 60);
+      const totalUsedMins = coldUsedMins + mealUsedMins;
+      const remainingMins = totalQuotaMins - totalUsedMins;
+
+      return {
+        otHours,
+        coldRounds,
+        mealRounds,
+        coldQuotaMins,
+        mealQuotaMins,
+        totalQuotaMins,
+        coldUsedMins,
+        mealUsedMins,
+        totalUsedMins,
+        remainingMins,
+        isOverQuota: remainingMins < 0
+      };
+    }
+
+    /**************************************************************************
+     * 6. SCANNING LOGIC (START BREAK / END BREAK)
+     **************************************************************************/
+    function setScanBreakType(type) {
+      selectedBreakType = type === 'MEAL' ? 'MEAL' : 'COLD';
+      const btnCold = document.getElementById('btnModeCold');
+      const btnMeal = document.getElementById('btnModeMeal');
+      if (selectedBreakType === 'COLD') {
+        btnCold.className = 'p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-sky-50 border-sky-500 text-sky-900 shadow-xs';
+        btnMeal.className = 'p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-white border-slate-200 text-slate-700 hover:border-orange-300';
+      } else {
+        btnCold.className = 'p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-white border-slate-200 text-slate-700 hover:border-sky-300';
+        btnMeal.className = 'p-3 rounded-xl border-2 text-left transition flex items-center gap-2.5 bg-orange-50 border-orange-500 text-orange-950 shadow-xs';
+      }
+    }
+
+    function appendNumpad(digit) {
+      const input = document.getElementById('scanCodeInput');
+      if (!input) return;
+      input.value = (input.value || '') + digit;
+      input.focus();
+    }
+
+    function clearNumpad() {
+      const input = document.getElementById('scanCodeInput');
+      if (input) {
+        input.value = '';
+        input.focus();
+      }
+    }
+
+    function submitNumpad() {
+      const input = document.getElementById('scanCodeInput');
+      if (!input) return;
+      const code = input.value.trim();
+      if (!code) {
+        showToast('กรุณากรอกรหัสพนักงานหรือยิงบาร์โค้ดก่อนกดยืนยัน', 'warning');
+        return;
+      }
+      processEmployeeScan(code, 'แป้นกดหน้าจอ');
+      input.value = '';
+    }
+
+    function handleScanFormSubmit(event) {
+      event.preventDefault();
+      submitNumpad();
+    }
+
+    function showScanFeedback(variant, titleTh, titleMm, detailText) {
+      const banner = document.getElementById('scanFeedbackBanner');
+      const tTh = document.getElementById('fbTitleTh');
+      const tMm = document.getElementById('fbTitleMm');
+      const det = document.getElementById('fbDetail');
+      if (!banner) return;
+
+      const styles = {
+        start: 'bg-sky-50 border-sky-400 text-sky-950',
+        endOk: 'bg-emerald-50 border-emerald-400 text-emerald-950',
+        endOver: 'bg-rose-50 border-rose-400 text-rose-950',
+        error: 'bg-red-50 border-red-400 text-red-900'
+      };
+      banner.className = `rounded-xl p-3.5 border-2 transition-all ${styles[variant] || styles.start}`;
+      tTh.textContent = titleTh;
+      tMm.textContent = titleMm;
+      det.textContent = detailText;
+      banner.classList.remove('hidden');
+    }
+
+    function processEmployeeScan(rawCode, sourceLabel = 'RF Scanner Code_128') {
+      const cleanCode = String(rawCode || '').replace(/\*/g, '').trim().toUpperCase();
+      if (!cleanCode) return;
+
+      const emp = appState.employees.find(
+        (e) => String(e.id).toUpperCase() === cleanCode || String(e.pin || '').toUpperCase() === cleanCode
+      );
+
+      if (!emp) {
+        playSound('error');
+        showScanFeedback(
+          'error',
+          `❌ ไม่พบรหัสพนักงาน "${cleanCode}" ในระบบ`,
+          `ဝန်ထမ်းနံပါတ် "${cleanCode}" မတွေ့ပါ`,
+          'กรุณาเพิ่มรายชื่อพนักงานหรือนำเข้าไฟล์ CSV ในแท็บที่ 5 (พนักงาน & พิมพ์ลาเบล) ก่อนเริ่มสแกน'
+        );
+        return;
+      }
+
+      const now = Date.now();
+      const todayKey = getRelativeDateKey(0);
+      const existingIndex = appState.activeBreaks.findIndex((a) => a.empId === emp.id);
+
+      if (existingIndex === -1) {
+        // START BREAK
+        const breakType = selectedBreakType;
+        const limitMinutes = breakType === 'MEAL' ? QUOTA_RULES.MEAL_BREAK_MINS : QUOTA_RULES.COLD_BREAK_MINS;
+        const startTimeStr = formatTimeHMS(new Date(now));
+        const expectedEndStr = formatTimeHMS(new Date(now + limitMinutes * 60000));
+
+        const newSession = {
+          id: `ACT_${emp.id}_${now}`,
+          empId: emp.id,
+          pin: emp.pin || emp.id,
+          empName: emp.name,
+          nickname: emp.nickname || '',
+          myanmarName: emp.myanmarName || '',
+          zone: emp.zone || 'Frozen -25°C',
+          breakType,
+          limitMinutes,
+          startTimestamp: now,
+          startTime: startTimeStr,
+          expectedEndTime: expectedEndStr,
+          dateKey: todayKey,
+          note: `สแกน: ${sourceLabel}`
+        };
+
+        appState.activeBreaks.push(newSession);
+        saveState();
+        playSound('start');
+
+        const quota = calculateEmployeeQuota(emp, todayKey);
+        const typeLabelTh = breakType === 'MEAL' ? 'พักทานข้าว (80 นาที)' : 'พักเบรกหนาว (15 นาที)';
+        const typeLabelMm = breakType === 'MEAL' ? 'ထမင်းစားနားချိန် (၈၀ မိနစ်)' : 'အအေးခန်းနားချိန် (၁၅ မိနစ်)';
+
+        showScanFeedback(
+          'start',
+          `❄️ เริ่ม${typeLabelTh} — ${emp.name} (${emp.nickname || emp.id})`,
+          `${emp.myanmarName || emp.name} • ${typeLabelMm} စတင်ပါပြီ`,
+          `เริ่มเวลา ${startTimeStr} • ครบกำหนด ${expectedEndStr} • สะสมวันนี้ ${quota.totalUsedMins}/${quota.totalQuotaMins} นาที`
+        );
+
+        renderAll();
+
+        if (shouldAutoSyncToGoogleSheet()) {
+          enqueueGoogleSheetSync({
+            action: 'START_BREAK',
+            logMode: getGoogleSheetLogMode(),
+            session: newSession,
+            quota,
+            activeBreaks: appState.activeBreaks
+          });
+        }
+      } else {
+        // END BREAK (RETURN TO COLD ROOM)
+        const session = appState.activeBreaks[existingIndex];
+        appState.activeBreaks.splice(existingIndex, 1);
+        alertedOverdueKeys.delete(session.id || session.empId);
+
+        const durationSec = Math.max(1, Math.floor((now - Number(session.startTimestamp)) / 1000));
+        const durationMins = Math.max(0, Math.round(durationSec / 60));
+        const limitMinutes = Number(session.limitMinutes) || (session.breakType === 'MEAL' ? 80 : 15);
+        const isOvertime = durationSec > (limitMinutes * 60);
+        const endTimeStr = formatTimeHMS(new Date(now));
+
+        const logEntry = {
+          id: `LOG_${emp.id}_${now}`,
+          dateKey: session.dateKey || todayKey,
+          empId: emp.id,
+          pin: emp.pin || emp.id,
+          empName: emp.name,
+          nickname: emp.nickname || '',
+          zone: session.zone || emp.zone || 'Frozen -25°C',
+          breakType: session.breakType || 'COLD',
+          startTime: session.startTime || formatTimeHMS(new Date(session.startTimestamp)),
+          endTime: endTimeStr,
+          startTimestamp: session.startTimestamp,
+          endTimestamp: now,
+          durationSec,
+          durationMins,
+          durationText: formatMMSS(durationSec),
+          limitMinutes,
+          isOvertime,
+          note: `${session.breakType === 'MEAL' ? 'ทานข้าว' : 'เบรกหนาว'}: ${sourceLabel}`
+        };
+
+        appState.historyLogs.unshift(logEntry);
+        saveState();
+        playSound(isOvertime ? 'overdue' : 'end');
+
+        const quota = calculateEmployeeQuota(emp, todayKey);
+        showScanFeedback(
+          isOvertime ? 'endOver' : 'endOk',
+          `${isOvertime ? '🚨 กลับเข้าห้องเย็น (เกินเวลา)' : '✅ กลับเข้าห้องเย็นตรงเวลา'} — ${emp.name}`,
+          `${emp.myanmarName || emp.name} • ${isOvertime ? 'အချိန်ကျော်လွန်၍ ပြန်ဝင်ပါပြီ' : 'အချိန်မှန် ပြန်ဝင်ပါပြီ'}`,
+          `ใช้เวลาพัก ${formatMMSS(durationSec)} นาที (เกณฑ์ ${limitMinutes} น.) • โควตาสะสมวันนี้ ${quota.totalUsedMins}/${quota.totalQuotaMins} นาที (เหลือ ${quota.remainingMins} น.)`
+        );
+
+        renderAll();
+
+        if (shouldAutoSyncToGoogleSheet()) {
+          enqueueGoogleSheetSync({
+            action: 'END_BREAK',
+            logMode: getGoogleSheetLogMode(),
+            logItem: logEntry,
+            quota,
+            activeBreaks: appState.activeBreaks
+          });
+        }
+      }
+    }
+
+    function extendActiveBreak(empId, extraMins = 5) {
+      const target = appState.activeBreaks.find((a) => a.empId === empId);
+      if (!target) return;
+      target.limitMinutes = (Number(target.limitMinutes) || 15) + extraMins;
+      target.expectedEndTime = formatTimeHMS(new Date(Number(target.startTimestamp) + target.limitMinutes * 60000));
+      saveState();
+      renderAll();
+      showToast(`ต่อเวลาพักให้ ${target.empName} เพิ่ม +${extraMins} นาทีแล้ว`, 'info');
+      if (shouldAutoSyncToGoogleSheet()) {
+        pushLiveStateToGoogleSheet(false);
+      }
+    }
+
+    /**************************************************************************
+     * 7. RENDERING FUNCTIONS (ALL 5 TABS)
+     **************************************************************************/
+    function switchTab(tabName) {
+      currentTab = tabName;
+      const tabs = ['kiosk', 'quota', 'history', 'backend', 'staff'];
+      tabs.forEach((t) => {
+        const panel = document.getElementById(`tabPanel-${t}`);
+        const btn = document.getElementById(`tabBtn-${t}`);
+        if (panel) panel.classList.toggle('hidden', t !== tabName);
+        if (btn) {
+          btn.className = `${t === 'staff' ? 'col-span-2 sm:col-span-1 ' : ''}${
+            t === tabName ? 'tab-btn-active' : 'tab-btn-idle'
+          } border rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition`;
+        }
+      });
+      renderAll();
+    }
+
+    function updateClockAndLiveTimers() {
+      const now = new Date();
+      const clockEl = document.getElementById('liveClockText');
+      const dateEl = document.getElementById('liveDateText');
+      if (clockEl) clockEl.textContent = formatTimeHMS(now);
+      if (dateEl) {
+        dateEl.textContent = now.toLocaleDateString('th-TH', {
+          weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+        });
+      }
+      renderKPIHeader();
+      if (currentTab === 'kiosk') {
+        renderActiveBreakBoard();
+        renderKioskQuotaMiniGrid();
+      } else if (currentTab === 'quota') {
+        renderQuotaTable();
+      }
+    }
+
+    function renderKPIHeader() {
+      const now = Date.now();
+      const todayKey = getRelativeDateKey(0);
+      let normal = 0, warning = 0, overdue = 0;
+
+      appState.activeBreaks.forEach((item) => {
+        const limitSec = (Number(item.limitMinutes) || 15) * 60;
+        const elapsedSec = Math.max(0, Math.floor((now - Number(item.startTimestamp)) / 1000));
+        const remainSec = limitSec - elapsedSec;
+        if (remainSec < 0) {
+          overdue++;
+          const key = item.id || item.empId;
+          if (!alertedOverdueKeys.has(key)) {
+            alertedOverdueKeys.add(key);
+            playSound('overdue');
+            showToast(`🚨 ${item.empName} พักเกินเวลาแล้ว!`, 'error');
+          }
+        } else if (remainSec <= 120) {
+          warning++;
+        } else {
+          normal++;
+        }
+      });
+
+      const todayLogs = appState.historyLogs.filter((l) => l.dateKey === todayKey);
+      const onTime = todayLogs.filter((l) => !l.isOvertime).length;
+      const rate = todayLogs.length > 0 ? Math.round((onTime / todayLogs.length) * 100) : 100;
+
+      document.getElementById('kpiTotalActive').textContent = appState.activeBreaks.length;
+      document.getElementById('kpiNormal').textContent = normal;
+      document.getElementById('kpiWarning').textContent = warning;
+      document.getElementById('kpiOverdue').textContent = overdue;
+      document.getElementById('kpiCompletedToday').textContent = `${todayLogs.length}`;
+      document.getElementById('kpiOnTimeRate').textContent = `${rate}%`;
+    }
+
+    function renderQuickScanChips() {
+      const box = document.getElementById('quickScanChips');
+      if (!box) return;
+      if (appState.employees.length === 0) {
+        box.innerHTML = `
+          <div class="w-full p-3 rounded-xl border border-dashed border-slate-300 bg-slate-50 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600">
+            <span>ยังไม่มีรายชื่อพนักงานในระบบ (เริ่มต้นใหม่เรียบร้อย)</span>
+            <button type="button" onclick="switchTab('staff')" class="px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-700 text-white font-bold transition">
+              + เพิ่มพนักงาน / นำเข้า CSV
+            </button>
+          </div>
+        `;
+        return;
+      }
+      box.innerHTML = appState.employees.slice(0, 14).map((emp) => {
+        const isActive = appState.activeBreaks.some((a) => a.empId === emp.id);
+        return `
+          <button type="button" onclick="processEmployeeScan('${escapeHtml(emp.id)}', 'ปุ่มสแกนด่วนหน้าจอ')"
+            class="px-2.5 py-1.5 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition ${
+              isActive
+                ? 'bg-sky-600 text-white border-sky-700 shadow-xs'
+                : 'bg-white hover:bg-sky-50 text-slate-700 border-slate-200'
+            }">
+            <span class="w-2 h-2 rounded-full ${isActive ? 'bg-amber-300 animate-ping' : 'bg-emerald-500'}"></span>
+            <span>${escapeHtml(emp.nickname || emp.name)}</span>
+            <span class="font-mono-num text-[10px] opacity-75">${escapeHtml(emp.id)}</span>
+          </button>
+        `;
+      }).join('');
+    }
+
+    function renderActiveBreakBoard() {
+      const board = document.getElementById('activeBreakBoard');
+      if (!board) return;
+
+      if (appState.activeBreaks.length === 0) {
+        board.innerHTML = `
+          <div class="col-span-full flex flex-col items-center justify-center py-20 text-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70">
+            <div class="text-4xl mb-2">❄️</div>
+            <p class="text-base font-extrabold text-slate-700">ขณะนี้ไม่มีพนักงานกำลังพักเบรก</p>
+            <p class="text-xs text-slate-500 mt-1">လက်ရှိ အနားယူနေသော ဝန်ထမ်းမရှိပါ • พร้อมรับการสแกนบาร์โค้ด Code_128</p>
+          </div>
+        `;
+        return;
+      }
+
+      const now = Date.now();
+      const todayKey = getRelativeDateKey(0);
+      const enriched = appState.activeBreaks.map((item) => {
+        const emp = appState.employees.find((e) => e.id === item.empId) || {
+          id: item.empId, name: item.empName, nickname: item.nickname, myanmarName: item.myanmarName, zone: item.zone
+        };
+        const limitMinutes = Number(item.limitMinutes) || (item.breakType === 'MEAL' ? 80 : 15);
+        const elapsedSec = Math.max(0, Math.floor((now - Number(item.startTimestamp)) / 1000));
+        const remainSec = (limitMinutes * 60) - elapsedSec;
+        const status = remainSec < 0 ? 'overdue' : (remainSec <= 120 ? 'warning' : 'normal');
+        return { ...item, emp, limitMinutes, elapsedSec, remainSec, status };
+      });
+
+      const rank = { overdue: 0, warning: 1, normal: 2 };
+      enriched.sort((a, b) => rank[a.status] - rank[b.status] || a.remainSec - b.remainSec);
+
+      board.innerHTML = enriched.map((item) => {
+        const quota = calculateEmployeeQuota(item.emp, todayKey);
+        const isMeal = item.breakType === 'MEAL' || item.breakType === 'meal';
+
+        let cardCls = 'bg-white border-2 border-sky-200';
+        let timerCls = 'text-sky-600';
+        let badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800">ปกติ</span>';
+
+        if (item.status === 'overdue') {
+          cardCls = 'card-overdue border-2';
+          timerCls = 'text-red-600';
+          badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-600 text-white">🚨 เกินเวลา!</span>';
+        } else if (item.status === 'warning') {
+          cardCls = 'card-warning border-2';
+          timerCls = 'text-amber-600';
+          badgeHtml = '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-white">⏳ ใกล้หมดเวลา</span>';
+        }
+
+        return `
+          <div class="${cardCls} rounded-2xl p-4 shadow-xs flex flex-col justify-between gap-3">
+            <div class="flex items-start justify-between gap-2">
+              <div>
+                <div class="flex flex-wrap items-center gap-1.5">
+                  <span class="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-mono-num font-bold">${escapeHtml(item.emp.id)}</span>
+                  <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isMeal ? 'bg-orange-100 text-orange-800' : 'bg-sky-100 text-sky-800'}">
+                    ${isMeal ? `🍱 ทานข้าว (${item.limitMinutes}น.)` : `❄️ เบรกหนาว (${item.limitMinutes}น.)`}
+                  </span>
+                </div>
+                <h3 class="text-base font-extrabold text-slate-900 mt-1">
+                  ${escapeHtml(item.emp.name)} ${item.emp.nickname ? `<span class="text-sky-600">(${escapeHtml(item.emp.nickname)})</span>` : ''}
+                </h3>
+                <p class="text-[11px] text-slate-500">${escapeHtml(item.emp.myanmarName || '')} • ${escapeHtml(item.emp.zone || 'Frozen -25°C')}</p>
+              </div>
+              ${badgeHtml}
+            </div>
+
+            <div class="bg-white/85 border border-slate-200 rounded-xl px-3.5 py-2.5 flex items-center justify-between">
+              <div>
+                <div class="text-[10px] font-bold text-slate-400 uppercase">${item.remainSec < 0 ? 'เกินเวลากำหนด' : 'เวลาคงเหลือ'}</div>
+                <div class="text-[11px] text-slate-600">เริ่ม ${escapeHtml(item.startTime)} • ครบ ${escapeHtml(item.expectedEndTime || '--:--')}</div>
+              </div>
+              <div class="text-3xl font-extrabold font-mono-num ${timerCls}">
+                ${item.remainSec < 0 ? '+' : ''}${formatMMSS(item.remainSec)}
+              </div>
+            </div>
+
+            <div class="flex items-center justify-between gap-2 text-[11px]">
+              <span class="text-slate-600">โควตาวันนี้: <strong>${quota.totalUsedMins}/${quota.totalQuotaMins} น.</strong></span>
+              <div class="flex items-center gap-1.5">
+                <button onclick="extendActiveBreak('${escapeHtml(item.emp.id)}', 5)"
+                  class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold transition">+5 น.</button>
+                <button onclick="processEmployeeScan('${escapeHtml(item.emp.id)}', 'กดปุ่มกลับเข้าห้องเย็น')"
+                  class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition">กลับเข้าห้องเย็น ✓</button>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderKioskQuotaMiniGrid() {
+      const grid = document.getElementById('kioskQuotaMiniGrid');
+      if (!grid) return;
+
+      if (appState.employees.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full p-6 rounded-xl border border-dashed border-slate-300 bg-slate-50/70 text-center space-y-1.5">
+            <p class="text-sm font-extrabold text-slate-700">ระบบพร้อมตั้งต้นใหม่แล้ว — ยังไม่มีรายชื่อพนักงาน</p>
+            <p class="text-xs text-slate-500">ไปที่แท็บ <strong>5) พนักงาน &amp; พิมพ์ลาเบล</strong> เพื่อเพิ่มพนักงานหรืออัปโหลดไฟล์ CSV หรือดึงข้อมูลจาก Google Sheets ในแท็บที่ 4</p>
+          </div>
+        `;
+        return;
+      }
+
+      const todayKey = getRelativeDateKey(0);
+      grid.innerHTML = appState.employees.slice(0, 9).map((emp) => {
+        const q = calculateEmployeeQuota(emp, todayKey);
+        const pct = Math.min(100, Math.round((q.totalUsedMins / Math.max(1, q.totalQuotaMins)) * 100));
+        return `
+          <div class="p-3 rounded-xl bg-white border border-slate-200 space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <div class="truncate">
+                <span class="text-xs font-extrabold text-slate-900">${escapeHtml(emp.name)}</span>
+                <span class="text-[11px] text-slate-500">(${escapeHtml(emp.nickname || emp.id)})</span>
+              </div>
+              <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${q.isOverQuota ? 'bg-red-100 text-red-700' : 'bg-emerald-100 text-emerald-700'}">
+                ${q.isOverQuota ? `เกิน +${Math.abs(q.remainingMins)}น.` : `เหลือ ${q.remainingMins}น.`}
+              </span>
+            </div>
+            <div class="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+              <div class="h-full ${q.isOverQuota ? 'bg-red-500' : 'bg-sky-500'}" style="width:${pct}%"></div>
+            </div>
+            <div class="flex items-center justify-between text-[11px] text-slate-500">
+              <span>❄️ ${q.coldUsedMins}/${q.coldQuotaMins}น. • 🍱 ${q.mealUsedMins}/${q.mealQuotaMins}น.</span>
+              <span class="font-bold text-slate-800">${q.totalUsedMins}/${q.totalQuotaMins}น.</span>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function setQuotaDateOffset(offsetDays) {
+      const picker = document.getElementById('quotaDatePicker');
+      if (picker) picker.value = getRelativeDateKey(offsetDays);
+      renderQuotaTable();
+    }
+
+    function adjustEmployeeOT(empId, delta) {
+      const dateKey = document.getElementById('quotaDatePicker')?.value || getRelativeDateKey(0);
+      const current = getEmployeeOtForDate(empId, dateKey);
+      const next = Math.max(0, Math.min(8, current + delta));
+      appState.dailyOtByDate[`${dateKey}_${empId}`] = next;
+      const emp = appState.employees.find((e) => e.id === empId);
+      if (emp && dateKey === getRelativeDateKey(0)) emp.otHours = next;
+      saveState();
+      renderAll();
+      if (shouldAutoSyncToGoogleSheet()) {
+        enqueueGoogleSheetSync({ action: 'SYNC_OT', dailyOtByDate: appState.dailyOtByDate, employees: appState.employees });
+      }
+    }
+
+    function applyBulkOT(hours) {
+      const dateKey = document.getElementById('quotaDatePicker')?.value || getRelativeDateKey(0);
+      appState.employees.forEach((emp) => {
+        const next = Math.min(8, getEmployeeOtForDate(emp.id, dateKey) + hours);
+        appState.dailyOtByDate[`${dateKey}_${emp.id}`] = next;
+        if (dateKey === getRelativeDateKey(0)) emp.otHours = next;
+      });
+      saveState();
+      renderAll();
+      showToast(`เพิ่ม OT +${hours} ชม. ให้พนักงานทุกคนในวันที่ ${dateKey} แล้ว`, 'success');
+      if (shouldAutoSyncToGoogleSheet()) {
+        enqueueGoogleSheetSync({ action: 'SYNC_OT', dailyOtByDate: appState.dailyOtByDate, employees: appState.employees });
+      }
+    }
+
+    function resetBulkOT() {
+      const dateKey = document.getElementById('quotaDatePicker')?.value || getRelativeDateKey(0);
+      appState.employees.forEach((emp) => {
+        appState.dailyOtByDate[`${dateKey}_${emp.id}`] = 0;
+        if (dateKey === getRelativeDateKey(0)) emp.otHours = 0;
+      });
+      saveState();
+      renderAll();
+      showToast(`รีเซ็ต OT วันที่ ${dateKey} เป็น 0 ชม. แล้ว`, 'info');
+    }
+
+    function renderQuotaTable() {
+      const picker = document.getElementById('quotaDatePicker');
+      if (picker && !picker.value) picker.value = getRelativeDateKey(0);
+      const dateKey = picker ? picker.value : getRelativeDateKey(0);
+      const tbody = document.getElementById('quotaTableBody');
+      if (!tbody) return;
+
+      if (appState.employees.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="6" class="py-10 text-center text-slate-400">ยังไม่มีรายชื่อพนักงาน กรุณาเพิ่มพนักงานหรือนำเข้าไฟล์ CSV ในแท็บที่ 5</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = appState.employees.map((emp) => {
+        const q = calculateEmployeeQuota(emp, dateKey);
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-3 px-3">
+              <div class="font-extrabold text-slate-900">${escapeHtml(emp.name)} ${emp.nickname ? `<span class="text-sky-600 font-semibold">(${escapeHtml(emp.nickname)})</span>` : ''}</div>
+              <div class="text-[11px] text-slate-400 font-mono-num">${escapeHtml(emp.id)} • ${escapeHtml(emp.zone || '')}</div>
+            </td>
+            <td class="py-3 px-3 text-center">
+              <div class="inline-flex items-center gap-1.5 bg-slate-100 rounded-lg p-1">
+                <button onclick="adjustEmployeeOT('${escapeHtml(emp.id)}', -1)" class="w-6 h-6 rounded bg-white hover:bg-rose-50 text-slate-700 font-extrabold border border-slate-200">-</button>
+                <span class="w-10 text-center font-mono-num font-extrabold text-indigo-700">${q.otHours} ชม.</span>
+                <button onclick="adjustEmployeeOT('${escapeHtml(emp.id)}', 1)" class="w-6 h-6 rounded bg-white hover:bg-indigo-50 text-slate-700 font-extrabold border border-slate-200">+</button>
+              </div>
+            </td>
+            <td class="py-3 px-3 text-center font-mono-num">
+              <span class="font-extrabold text-sky-700">${q.coldUsedMins}</span> / ${q.coldQuotaMins} น.
+              <div class="text-[10px] text-slate-400">(${q.coldRounds} รอบ)</div>
+            </td>
+            <td class="py-3 px-3 text-center font-mono-num">
+              <span class="font-extrabold text-orange-700">${q.mealUsedMins}</span> / ${q.mealQuotaMins} น.
+              <div class="text-[10px] text-slate-400">(${q.mealRounds} รอบ)</div>
+            </td>
+            <td class="py-3 px-3 text-center font-mono-num font-extrabold text-slate-900">
+              ${q.totalUsedMins} / ${q.totalQuotaMins} นาที
+            </td>
+            <td class="py-3 px-3 text-right">
+              ${q.isOverQuota
+                ? `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-red-100 text-red-700">เกินโควตา +${Math.abs(q.remainingMins)} น.</span>`
+                : `<span class="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-emerald-100 text-emerald-700">เหลือ ${q.remainingMins} น.</span>`
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function clearHistoryDateFilter() {
+      const el = document.getElementById('historyDateFilter');
+      if (el) el.value = '';
+      renderHistoryTable();
+    }
+
+    function getFilteredHistoryLogs() {
+      const dateVal = document.getElementById('historyDateFilter')?.value || '';
+      const zoneVal = document.getElementById('historyZoneFilter')?.value || 'ALL';
+      const typeVal = document.getElementById('historyTypeFilter')?.value || 'ALL';
+      const statusVal = document.getElementById('historyStatusFilter')?.value || 'ALL';
+      const q = (document.getElementById('historySearchInput')?.value || '').trim().toLowerCase();
+
+      return appState.historyLogs.filter((log) => {
+        if (dateVal && log.dateKey !== dateVal) return false;
+        if (zoneVal !== 'ALL' && log.zone !== zoneVal) return false;
+        if (typeVal !== 'ALL') {
+          const isMeal = log.breakType === 'MEAL' || log.breakType === 'meal';
+          if (typeVal === 'MEAL' && !isMeal) return false;
+          if (typeVal === 'COLD' && isMeal) return false;
+        }
+        if (statusVal === 'ONTIME' && log.isOvertime) return false;
+        if (statusVal === 'OVERTIME' && !log.isOvertime) return false;
+        if (q) {
+          const hay = `${log.empId} ${log.empName} ${log.nickname || ''}`.toLowerCase();
+          if (!hay.includes(q)) return false;
+        }
+        return true;
+      });
+    }
+
+    function renderHistoryTable() {
+      const tbody = document.getElementById('historyTableBody');
+      if (!tbody) return;
+      const rows = getFilteredHistoryLogs();
+
+      if (rows.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="8" class="py-10 text-center text-slate-400">ไม่พบประวัติการสแกนตามเงื่อนไขที่เลือก</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = rows.slice(0, 300).map((log) => {
+        const isMeal = log.breakType === 'MEAL' || log.breakType === 'meal';
+        return `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono-num text-slate-600">${escapeHtml(log.dateKey)}</td>
+            <td class="py-2.5 px-3">
+              <div class="font-bold text-slate-900">${escapeHtml(log.empName)}</div>
+              <div class="text-[10px] font-mono-num text-slate-400">${escapeHtml(log.empId)}</div>
+            </td>
+            <td class="py-2.5 px-3 text-slate-600">${escapeHtml(log.zone || '-')}</td>
+            <td class="py-2.5 px-3">
+              <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isMeal ? 'bg-orange-100 text-orange-800' : 'bg-sky-100 text-sky-800'}">
+                ${isMeal ? '🍱 ทานข้าว' : '❄️ เบรกหนาว'}
+              </span>
+            </td>
+            <td class="py-2.5 px-3 text-center font-mono-num">${escapeHtml(log.startTime || '-')}</td>
+            <td class="py-2.5 px-3 text-center font-mono-num">${escapeHtml(log.endTime || '-')}</td>
+            <td class="py-2.5 px-3 text-center font-mono-num font-bold text-slate-800">
+              ${escapeHtml(log.durationText || formatMMSS(log.durationSec || 0))} <span class="text-[10px] text-slate-400">(เกณฑ์ ${log.limitMinutes}น.)</span>
+            </td>
+            <td class="py-2.5 px-3 text-right">
+              ${log.isOvertime
+                ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">🚨 เกินเวลา</span>'
+                : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">✅ ตรงเวลา</span>'
+              }
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function renderBackendTab() {
+      const datesSet = new Set(appState.historyLogs.map((l) => l.dateKey).filter(Boolean));
+      document.getElementById('statBackendEmp').textContent = `${appState.employees.length} คน`;
+      document.getElementById('statBackendLogs').textContent = `${appState.historyLogs.length} รายการ`;
+      document.getElementById('statBackendDays').textContent = `${datesSet.size} วัน`;
+
+      const urlInput = document.getElementById('gsUrlInput');
+      const autoChk = document.getElementById('gsAutoSyncToggle');
+      const modeSel = document.getElementById('gsLogModeSelect');
+      const monthPicker = document.getElementById('archiveMonthPicker');
+      if (urlInput && document.activeElement !== urlInput) urlInput.value = getGoogleSheetUrl();
+      if (autoChk) autoChk.checked = isGoogleSheetAutoSyncEnabled();
+      if (modeSel) modeSel.value = getGoogleSheetLogMode();
+      if (monthPicker && !monthPicker.value) monthPicker.value = getCurrentMonthKey();
+
+      // Render Daily Summary Table
+      const dailyTbody = document.getElementById('dailySummaryTableBody');
+      const grouped = {};
+      appState.historyLogs.forEach((log) => {
+        const dk = log.dateKey || getRelativeDateKey(0);
+        if (!grouped[dk]) grouped[dk] = { dateKey: dk, total: 0, coldSec: 0, mealSec: 0, onTime: 0, overTime: 0 };
+        grouped[dk].total++;
+        const sec = Number(log.durationSec) || ((Number(log.durationMins) || 0) * 60);
+        if (log.breakType === 'MEAL' || log.breakType === 'meal') grouped[dk].mealSec += sec;
+        else grouped[dk].coldSec += sec;
+        if (log.isOvertime) grouped[dk].overTime++;
+        else grouped[dk].onTime++;
+      });
+
+      const daysArr = Object.values(grouped).sort((a, b) => b.dateKey.localeCompare(a.dateKey));
+      if (daysArr.length === 0) {
+        dailyTbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">ยังไม่มีข้อมูลสรุปรายวัน (เริ่มต้นใหม่เรียบร้อย)</td></tr>`;
+      } else {
+        dailyTbody.innerHTML = daysArr.map((d) => {
+          const rate = d.total > 0 ? Math.round((d.onTime / d.total) * 100) : 100;
+          return `
+            <tr class="hover:bg-slate-50">
+              <td class="py-2.5 px-3 font-mono-num font-bold text-slate-900">${escapeHtml(d.dateKey)}</td>
+              <td class="py-2.5 px-3 text-center font-mono-num font-bold">${d.total} รอบ</td>
+              <td class="py-2.5 px-3 text-center font-mono-num text-sky-700 font-bold">${Math.round(d.coldSec / 60)} น.</td>
+              <td class="py-2.5 px-3 text-center font-mono-num text-orange-700 font-bold">${Math.round(d.mealSec / 60)} น.</td>
+              <td class="py-2.5 px-3 text-center">
+                <span class="text-emerald-700 font-bold">${d.onTime}</span> / <span class="text-red-600 font-bold">${d.overTime}</span>
+                <span class="text-[10px] text-slate-400">(${rate}%)</span>
+              </td>
+              <td class="py-2.5 px-3 text-right space-x-1">
+                <button onclick="jumpToQuotaDate('${escapeHtml(d.dateKey)}')" class="px-2 py-1 rounded bg-sky-50 hover:bg-sky-100 text-sky-700 font-bold text-[11px]">ดูโควตา</button>
+                <button onclick="jumpToHistoryDate('${escapeHtml(d.dateKey)}')" class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-[11px]">ดูประวัติ</button>
+              </td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      // Render Archive History Table
+      const archTbody = document.getElementById('archiveHistoryTableBody');
+      if (archTbody && appState.archiveHistory.length > 0) {
+        archTbody.innerHTML = appState.archiveHistory.map((a) => `
+          <tr class="hover:bg-slate-50">
+            <td class="py-2.5 px-3 font-mono-num font-bold text-indigo-700">${escapeHtml(a.monthKey)}</td>
+            <td class="py-2.5 px-3 font-semibold text-slate-800">${escapeHtml(a.fileName)}</td>
+            <td class="py-2.5 px-3 text-center font-mono-num">${Number(a.logCount) || 0} รายการ</td>
+            <td class="py-2.5 px-3 text-slate-500 font-mono-num">${escapeHtml(a.archivedAt || '-')}</td>
+            <td class="py-2.5 px-3 text-right">
+              ${a.fileUrl ? `<a href="${escapeHtml(a.fileUrl)}" target="_blank" rel="noopener" class="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold">เปิดไฟล์ Drive ↗</a>` : '-'}
+            </td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function jumpToQuotaDate(dateKey) {
+      const picker = document.getElementById('quotaDatePicker');
+      if (picker) picker.value = dateKey;
+      switchTab('quota');
+    }
+
+    function jumpToHistoryDate(dateKey) {
+      const picker = document.getElementById('historyDateFilter');
+      if (picker) picker.value = dateKey;
+      switchTab('history');
+    }
+
+    /**************************************************************************
+     * 8. TRUE ISO/IEC 15417 CODE 128B BARCODE ENGINE (FOR RF SCANNERS)
+     **************************************************************************/
+    const CODE128_PATTERNS = [
+      '212222','222122','222221','121223','121322','131222','122213','122312','132212','221213',
+      '221312','231212','112232','122132','122231','113222','123122','123221','223211','221132',
+      '221231','213212','223112','312131','311222','321122','321221','312212','322112','322211',
+      '212123','212321','232121','111323','131123','131321','112313','132113','132311','211313',
+      '231113','231311','112133','112331','132131','113123','113321','133121','313121','211331',
+      '231131','213113','213311','213131','311123','311321','331121','312113','312311','332111',
+      '314111','221411','431111','111224','111422','121124','121421','141122','141221','112214',
+      '112412','122114','122411','142112','142211','241211','221114','413111','241112','134111',
+      '111242','121142','121241','114212','124112','124211','411212','421112','421211','212141',
+      '214121','412121','111143','111341','131141','114113','114311','411113','411311','113141',
+      '114131','311141','411131','211412','211214','211232','2331112'
+    ];
+
+    function encodeCode128BModules(text) {
+      const clean = String(text || '').replace(/[^\x20-\x7E]/g, '').trim() || 'EMP000';
+      const codes = [104]; // Start Code B
+      let checksum = 104;
+      for (let i = 0; i < clean.length; i++) {
+        const val = clean.charCodeAt(i) - 32;
+        codes.push(val);
+        checksum += val * (i + 1);
+      }
+      codes.push(checksum % 103); // Modulo 103 Checksum
+      codes.push(106);            // Stop Pattern (2331112)
+
+      // Convert width string into binary module array (1 = black bar, 0 = white space)
+      const modules = [];
+      for (let q = 0; q < 10; q++) modules.push(0); // Leading 10X Quiet Zone
+      codes.forEach((c) => {
+        const pat = CODE128_PATTERNS[c];
+        for (let i = 0; i < pat.length; i++) {
+          const width = Number(pat[i]);
+          const isBar = i % 2 === 0 ? 1 : 0;
+          for (let w = 0; w < width; w++) modules.push(isBar);
+        }
+      });
+      for (let q = 0; q < 10; q++) modules.push(0); // Trailing 10X Quiet Zone
+      return { clean, modules };
+    }
+
+    function generateCode128SVG(codeText, heightPx = 46) {
+      const { clean, modules } = encodeCode128BModules(codeText);
+      const totalModules = modules.length;
+      let rects = '';
+      let i = 0;
+      while (i < totalModules) {
+        if (modules[i] === 1) {
+          let run = 0;
+          while (i + run < totalModules && modules[i + run] === 1) run++;
+          rects += `<rect x="${i}" y="0" width="${run}" height="${heightPx}" fill="#000000" />`;
+          i += run;
+        } else {
+          i++;
+        }
+      }
+      return `
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${totalModules} ${heightPx}" preserveAspectRatio="none" shape-rendering="crispEdges" class="w-full h-[${heightPx}px] bg-white block">
+          <rect x="0" y="0" width="${totalModules}" height="${heightPx}" fill="#FFFFFF" />
+          ${rects}
+        </svg>
+      `;
+    }
+
+    /**************************************************************************
+     * 9. STAFF MANAGEMENT, BULK CSV IMPORT & THERMAL LABEL PRINTING (80x50mm)
+     **************************************************************************/
+    function renderStaffCards() {
+      const countEl = document.getElementById('staffTotalCount');
+      if (countEl) countEl.textContent = appState.employees.length;
+      const grid = document.getElementById('staffCardsGrid');
+      if (!grid) return;
+
+      if (appState.employees.length === 0) {
+        grid.innerHTML = `
+          <div class="col-span-full py-14 px-6 text-center rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 space-y-2">
+            <div class="text-4xl">🗂️</div>
+            <p class="text-base font-extrabold text-slate-800">ยังไม่มีรายชื่อพนักงานในระบบ</p>
+            <p class="text-xs text-slate-500 max-w-md mx-auto">
+              คุณสามารถเริ่มตั้งต้นใหม่ได้ทันทีโดยกรอกแบบฟอร์มเพิ่มพนักงานด้านซ้าย หรือคลิก <strong>อัปโหลดไฟล์ .CSV / .JSON</strong> เพื่อนำเข้ารายชื่อพร้อมสร้างบาร์โค้ด Code_128 ทั้งหมดในครั้งเดียว
+            </p>
+          </div>
+        `;
+        return;
+      }
+
+      grid.innerHTML = appState.employees.map((emp) => `
+        <div class="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col justify-between gap-3">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="px-2 py-0.5 rounded bg-slate-900 text-white text-[10px] font-mono-num font-bold">${escapeHtml(emp.id)}</span>
+                <span class="px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-bold">${escapeHtml(emp.zone || 'Frozen -25°C')}</span>
+              </div>
+              <h4 class="text-sm font-extrabold text-slate-900 mt-1">${escapeHtml(emp.name)} ${emp.nickname ? `<span class="text-sky-600">(${escapeHtml(emp.nickname)})</span>` : ''}</h4>
+              <p class="text-[11px] text-slate-500">${escapeHtml(emp.myanmarName || '')} • PIN: <strong class="font-mono-num">${escapeHtml(emp.pin || emp.id)}</strong> • ${escapeHtml(emp.role || 'Staff')}</p>
+            </div>
+            <button onclick="deleteStaff('${escapeHtml(emp.id)}')" title="ลบพนักงาน" class="w-7 h-7 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition">
+              <i class="fa-solid fa-trash-can text-xs"></i>
+            </button>
+          </div>
+
+          <div class="p-2.5 rounded-xl border border-slate-200 bg-white text-center">
+            ${generateCode128SVG(emp.id, 44)}
+            <div class="text-[11px] font-mono-num font-extrabold tracking-widest text-slate-900 mt-1">${escapeHtml(emp.id)}</div>
+            <div class="text-[9px] text-slate-400">Code_128B (RF Scanner Ready)</div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-1.5">
+            <button onclick="openPrintPreviewModal('${escapeHtml(emp.id)}', 'LABEL_80X50')"
+              class="py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-bold transition">
+              🏷️ ลาเบล 80×50
+            </button>
+            <button onclick="openPrintPreviewModal('${escapeHtml(emp.id)}', 'A4')"
+              class="py-1.5 rounded-lg bg-sky-50 hover:bg-sky-100 border border-sky-200 text-sky-800 text-[11px] font-bold transition">
+              🖨️ พิมพ์ A4
+            </button>
+            <button onclick="downloadBadgeAsPNG('${escapeHtml(emp.id)}')"
+              class="py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-800 text-[11px] font-bold transition">
+              🖼️ รูป 80×50
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function handleAddStaffSubmit(event) {
+      event.preventDefault();
+      const id = document.getElementById('newEmpId').value.trim().toUpperCase();
+      const pin = document.getElementById('newEmpPin').value.trim() || id;
+      const name = document.getElementById('newEmpName').value.trim();
+      const nickname = document.getElementById('newEmpNick').value.trim();
+      const myanmarName = document.getElementById('newEmpMyanmar').value.trim();
+      const zone = document.getElementById('newEmpZone').value;
+      const role = document.getElementById('newEmpRole').value.trim() || 'Picker';
+
+      if (!id || !name) return;
+      if (appState.employees.some((e) => e.id.toUpperCase() === id)) {
+        showToast(`รหัสพนักงาน ${id} มีอยู่ในระบบแล้ว`, 'warning');
+        return;
+      }
+
+      appState.employees.push({ id, pin, name, nickname, myanmarName, nation: 'TH', zone, role, otHours: 0 });
+      saveState();
+      renderAll();
+      event.target.reset();
+      showToast(`เพิ่มพนักงาน ${name} (${id}) และสร้างบาร์โค้ด Code_128 เรียบร้อยแล้ว`, 'success');
+
+      if (shouldAutoSyncToGoogleSheet()) {
+        syncEmployeesToGoogleSheet();
+      }
+    }
+
+    function deleteStaff(empId) {
+      appState.employees = appState.employees.filter((e) => e.id !== empId);
+      appState.activeBreaks = appState.activeBreaks.filter((a) => a.empId !== empId);
+      saveState();
+      renderAll();
+      showToast(`ลบพนักงานรหัส ${empId} ออกจากระบบแล้ว`, 'info');
+      if (shouldAutoSyncToGoogleSheet()) {
+        syncEmployeesToGoogleSheet();
+      }
+    }
+
+    function downloadStaffCsvTemplate() {
+      const csv = '\uFEFFEMP_ID,PIN,FULL_NAME,NICKNAME,MYANMAR_NAME,NATION,COLD_ZONE,ROLE,OT_HOURS\nTH060890,1001,พิลาวรรณ ทับทิม,อ้อม,,TH,Frozen -25°C,Picker,0\nTH060970,1002,รันนีกร ทองบ่อ,อัน,,TH,Frozen -25°C,Picker,0\n';
+      triggerFileDownload(csv, 'ColdRoom_Staff_Template.csv', 'text/csv;charset=utf-8;');
+      showToast('ดาวน์โหลดไฟล์แม่แบบ ColdRoom_Staff_Template.csv แล้ว', 'success');
+    }
+
+    function handleStaffFileUpload(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const text = String(e.target.result || '').replace(/^\uFEFF/, '');
+          let imported = [];
+
+          if (file.name.toLowerCase().endsWith('.json')) {
+            const parsed = JSON.parse(text);
+            const arr = Array.isArray(parsed) ? parsed : (parsed.employees || []);
+            imported = arr.map((item) => ({
+              id: String(item.id || item.EMP_ID || '').trim().toUpperCase(),
+              pin: String(item.pin || item.PIN || item.id || '').trim(),
+              name: String(item.name || item.FULL_NAME || '').trim(),
+              nickname: String(item.nickname || item.NICKNAME || '').trim(),
+              myanmarName: String(item.myanmarName || item.MYANMAR_NAME || '').trim(),
+              nation: String(item.nation || item.NATION || 'TH').trim(),
+              zone: String(item.zone || item.COLD_ZONE || 'Frozen -25°C').trim(),
+              role: String(item.role || item.ROLE || 'Picker').trim(),
+              otHours: Number(item.otHours || item.OT_HOURS || 0)
+            }));
+          } else {
+            const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+            lines.forEach((line, idx) => {
+              const cols = line.split(/,|\t/).map((c) => c.replace(/^"|"$/g, '').trim());
+              if (idx === 0 && (cols[0].toUpperCase().includes('EMP') || cols[0].toUpperCase() === 'ID')) return;
+              if (!cols[0] || !cols[2]) {
+                if (cols.length >= 2 && cols[0] && cols[1]) {
+                  imported.push({ id: cols[0].toUpperCase(), pin: cols[0], name: cols[1], nickname: cols[2] || '', myanmarName: '', nation: 'TH', zone: 'Frozen -25°C', role: 'Picker', otHours: 0 });
+                }
+                return;
+              }
+              imported.push({
+                id: cols[0].toUpperCase(),
+                pin: cols[1] || cols[0],
+                name: cols[2],
+                nickname: cols[3] || '',
+                myanmarName: cols[4] || '',
+                nation: cols[5] || 'TH',
+                zone: cols[6] || 'Frozen -25°C',
+                role: cols[7] || 'Picker',
+                otHours: Number(cols[8] || 0)
+              });
+            });
+          }
+
+          let added = 0, updated = 0;
+          imported.filter((x) => x.id && x.name).forEach((item) => {
+            const idx = appState.employees.findIndex((emp) => emp.id.toUpperCase() === item.id);
+            if (idx === -1) {
+              appState.employees.push(item);
+              added++;
+            } else {
+              appState.employees[idx] = { ...appState.employees[idx], ...item };
+              updated++;
+            }
+          });
+
+          saveState();
+          renderAll();
+          showToast(`นำเข้าพนักงานสำเร็จ: เพิ่มใหม่ ${added} คน, อัปเดต ${updated} คน`, 'success');
+          if (shouldAutoSyncToGoogleSheet()) syncEmployeesToGoogleSheet();
+        } catch (err) {
+          showToast('อ่านไฟล์ไม่สำเร็จ กรุณาตรวจสอบรูปแบบ CSV หรือ JSON', 'error');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    function getEmployeesForPrint() {
+      if (printModalTarget === 'ALL') return appState.employees;
+      return appState.employees.filter((e) => e.id === printModalTarget);
+    }
+
+    function openPrintPreviewModal(targetId, mode = 'LABEL_80X50') {
+      if (appState.employees.length === 0) {
+        showToast('ยังไม่มีรายชื่อพนักงานสำหรับพิมพ์บัตร กรุณาเพิ่มพนักงานก่อน', 'warning');
+        return;
+      }
+      printModalTarget = targetId;
+      printModalMode = mode;
+      const modal = document.getElementById('printPreviewModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+      renderPrintPreviewContent();
+    }
+
+    function closePrintPreviewModal() {
+      const modal = document.getElementById('printPreviewModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function switchPrintMode(mode) {
+      printModalMode = mode;
+      renderPrintPreviewContent();
+    }
+
+    function buildThermalLabelCardHtml(emp) {
+      return `
+        <div class="label-80x50" style="width:80mm;height:50mm;box-sizing:border-box;background:#FFFFFF;color:#000000;border:1px solid #000000;padding:2.5mm 3mm;display:flex;flex-direction:column;justify-content:space-between;font-family:'Prompt',sans-serif;page-break-after:always;break-after:page;">
+          <div style="display:flex;justify-content:space-between;align-items:center;border-bottom:1.5px solid #000;padding-bottom:1.2mm;">
+            <span style="font-size:8.5pt;font-weight:800;letter-spacing:0.3px;">COLD ROOM PASS</span>
+            <span style="font-size:8pt;font-weight:700;background:#000;color:#fff;padding:0.5mm 2mm;border-radius:1mm;">${escapeHtml(emp.zone || 'Frozen -25°C')}</span>
+          </div>
+          <div style="text-align:center;line-height:1.2;margin-top:0.5mm;">
+            <div style="font-size:11.5pt;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+              ${escapeHtml(emp.name)} ${emp.nickname ? `(${escapeHtml(emp.nickname)})` : ''}
+            </div>
+            <div style="font-size:7.5pt;font-weight:600;">
+              ${emp.myanmarName ? `${escapeHtml(emp.myanmarName)} • ` : ''}PIN: ${escapeHtml(emp.pin || emp.id)}
+            </div>
+          </div>
+          <div style="width:100%;padding:0.8mm 1mm 0 1mm;background:#FFFFFF;">
+            ${generateCode128SVG(emp.id, 48)}
+          </div>
+          <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10pt;font-weight:800;letter-spacing:2px;line-height:1;">
+            ${escapeHtml(emp.id)}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderPrintPreviewContent() {
+      const list = getEmployeesForPrint();
+      const body = document.getElementById('printPreviewBody');
+      const sub = document.getElementById('printPreviewSubtitle');
+      const b80 = document.getElementById('btnSwitchLabel80');
+      const bA4 = document.getElementById('btnSwitchA4');
+
+      if (printModalMode === 'LABEL_80X50') {
+        sub.textContent = `โหมดสติกเกอร์ลาเบลความร้อน 80mm × 50mm (จำนวน ${list.length} ดวง • 1 ดวง/หน้า • ขาว-ดำคมชัด Code_128)`;
+        b80.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white';
+        bA4.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 text-slate-700';
+      } else {
+        sub.textContent = `โหมดกระดาษ A4 มาตรฐาน (จำนวน ${list.length} บัตร • Code_128B RF Scanner)`;
+        b80.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-white border border-slate-300 text-slate-700';
+        bA4.className = 'px-3 py-1.5 rounded-lg text-xs font-bold bg-sky-600 text-white';
+      }
+
+      body.innerHTML = list.map((emp) => `
+        <div class="shadow-md bg-white rounded-sm overflow-hidden">${buildThermalLabelCardHtml(emp)}</div>
+      `).join('');
+    }
+
+    function buildStandalonePrintableDocument() {
+      const list = getEmployeesForPrint();
+      const isLabel = printModalMode === 'LABEL_80X50';
+      const pageCss = isLabel
+        ? `@page { size: 80mm 50mm; margin: 0mm; } body { margin: 0; padding: 0; background: #fff; }`
+        : `@page { size: A4 portrait; margin: 10mm; } body { margin: 0; padding: 8mm; background: #fff; display: flex; flex-wrap: wrap; gap: 6mm; } .label-80x50 { page-break-after: auto !important; break-after: auto !important; }`;
+
+      return [
+        '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><title>Print Code_128 Passcards</title>',
+        '<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Prompt:wght@600;700;800&display=swap" rel="stylesheet">',
+        `<style>${pageCss} * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }</style>`,
+        '</head><body>',
+        list.map((emp) => buildThermalLabelCardHtml(emp)).join(''),
+        '<scr' + 'ipt>window.onload=function(){setTimeout(function(){window.print();},350);};</scr' + 'ipt>',
+        '</body></html>'
+      ].join('');
+    }
+
+    function executeRealPrint() {
+      const docHtml = buildStandalonePrintableDocument();
+      const win = window.open('', '_blank', 'width=900,height=650');
+      if (win) {
+        win.document.open();
+        win.document.write(docHtml);
+        win.document.close();
+      } else {
+        // Fallback กรณี Popup ถูกบล็อก
+        const area = document.getElementById('inlinePrintArea');
+        area.innerHTML = getEmployeesForPrint().map((emp) => buildThermalLabelCardHtml(emp)).join('');
+        window.print();
+      }
+    }
+
+    function downloadPrintableHtmlFile() {
+      const docHtml = buildStandalonePrintableDocument();
+      const fileName = printModalMode === 'LABEL_80X50' ? 'ColdRoom_Labels_80x50mm.html' : 'ColdRoom_Passcards_A4.html';
+      triggerFileDownload(docHtml, fileName, 'text/html;charset=utf-8;');
+      showToast(`ดาวน์โหลด ${fileName} แล้ว (ดับเบิลคลิกเปิดไฟล์เพื่อสั่งพิมพ์ได้เลย)`, 'success');
+    }
+
+    function downloadBadgeAsPNG(empId) {
+      const emp = appState.employees.find((e) => e.id === empId);
+      if (!emp) return;
+
+      // 80mm x 50mm @ 300 DPI = 945 x 591 px
+      const canvas = document.createElement('canvas');
+      canvas.width = 945;
+      canvas.height = 591;
+      const ctx = canvas.getContext('2d');
+
+      ctx.fillStyle = '#FFFFFF';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      ctx.strokeStyle = '#000000';
+      ctx.lineWidth = 6;
+      ctx.strokeRect(12, 12, canvas.width - 24, canvas.height - 24);
+
+      // Header Band
+      ctx.fillStyle = '#000000';
+      ctx.fillRect(12, 12, canvas.width - 24, 92);
+      ctx.fillStyle = '#FFFFFF';
+      ctx.font = 'bold 34px Prompt, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('COLD ROOM BREAK PASS', 42, 70);
+      ctx.textAlign = 'right';
+      ctx.font = 'bold 30px Prompt, sans-serif';
+      ctx.fillText(emp.zone || 'Frozen -25°C', canvas.width - 42, 68);
+
+      // Employee Name
+      ctx.fillStyle = '#000000';
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 44px Prompt, sans-serif';
+      const displayTitle = emp.nickname ? `${emp.name} (${emp.nickname})` : emp.name;
+      ctx.fillText(displayTitle, canvas.width / 2, 175);
+
+      ctx.font = '600 26px Prompt, sans-serif';
+      ctx.fillStyle = '#334155';
+      ctx.fillText(`${emp.myanmarName ? emp.myanmarName + ' • ' : ''}PIN: ${emp.pin || emp.id} • Code_128B`, canvas.width / 2, 222);
+
+      // Crisp Integer-Pixel Code 128B Bars
+      const { modules } = encodeCode128BModules(emp.id);
+      const maxBarAreaW = canvas.width - 100;
+      const modWidth = Math.max(2, Math.floor(maxBarAreaW / modules.length));
+      const totalW = modWidth * modules.length;
+      const startX = Math.floor((canvas.width - totalW) / 2);
+      const barY = 258;
+      const barH = 215;
+
+      ctx.fillStyle = '#000000';
+      for (let i = 0; i < modules.length; i++) {
+        if (modules[i] === 1) {
+          ctx.fillRect(startX + (i * modWidth), barY, modWidth, barH);
+        }
+      }
+
+      // Human Readable Code
+      ctx.font = 'bold 46px "JetBrains Mono", monospace';
+      ctx.fillText(emp.id, canvas.width / 2, 535);
+
+      const link = document.createElement('a');
+      link.download = `Label_80x50_${emp.id}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+      showToast(`บันทึกรูปสติกเกอร์ 80×50mm (300 DPI) ของ ${emp.id} แล้ว`, 'success');
+    }
+
+    /**************************************************************************
+     * 10. CSV & JSON EXPORTS
+     **************************************************************************/
+    function triggerFileDownload(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }
+
+    function exportQuotaCSV() {
+      const dateKey = document.getElementById('quotaDatePicker')?.value || getRelativeDateKey(0);
+      const headers = ['วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'ชื่อเล่น', 'โซน', 'ชั่วโมง OT', 'เบรกหนาวใช้(นาที)', 'โควตาเบรกหนาว', 'ทานข้าวใช้(นาที)', 'โควตาทานข้าว', 'รวมใช้ทั้งวัน(นาที)', 'โควตารวม(นาที)', 'คงเหลือ(นาที)'];
+      const lines = [headers.join(',')];
+      appState.employees.forEach((emp) => {
+        const q = calculateEmployeeQuota(emp, dateKey);
+        lines.push([
+          dateKey, emp.id, `"${emp.name}"`, `"${emp.nickname || ''}"`, `"${emp.zone || ''}"`,
+          q.otHours, q.coldUsedMins, q.coldQuotaMins, q.mealUsedMins, q.mealQuotaMins, q.totalUsedMins, q.totalQuotaMins, q.remainingMins
+        ].join(','));
+      });
+      triggerFileDownload('\uFEFF' + lines.join('\n'), `ColdRoom_Quota_${dateKey}.csv`, 'text/csv;charset=utf-8;');
+      showToast(`ส่งออกสรุปโควตาวันที่ ${dateKey} เป็นไฟล์ .CSV แล้ว`, 'success');
+    }
+
+    function exportHistoryCSV() {
+      const rows = getFilteredHistoryLogs();
+      const headers = ['วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'โซน', 'ประเภท', 'เริ่มพัก', 'กลับเข้า', 'เวลาใช้จริง', 'เกณฑ์(นาที)', 'สถานะ'];
+      const lines = [headers.join(',')];
+      rows.forEach((l) => {
+        lines.push([
+          l.dateKey, l.empId, `"${l.empName}"`, `"${l.zone || ''}"`,
+          l.breakType === 'MEAL' ? 'พักทานข้าว' : 'พักเบรกหนาว',
+          l.startTime, l.endTime, l.durationText || formatMMSS(l.durationSec || 0),
+          l.limitMinutes, l.isOvertime ? 'เกินเวลา' : 'ตรงเวลา'
+        ].join(','));
+      });
+      triggerFileDownload('\uFEFF' + lines.join('\n'), `ColdRoom_Logs_${getRelativeDateKey(0)}.csv`, 'text/csv;charset=utf-8;');
+      showToast(`ส่งออกประวัติการสแกน ${rows.length} รายการเป็นไฟล์ .CSV แล้ว`, 'success');
+    }
+
+    function downloadMonthlySummaryCSV() {
+      const mk = document.getElementById('archiveMonthPicker')?.value || getCurrentMonthKey();
+      const monthLogs = appState.historyLogs.filter((l) => String(l.dateKey || '').startsWith(mk));
+      const headers = ['เดือน', 'วันที่', 'รหัสพนักงาน', 'ชื่อ-นามสกุล', 'โซน', 'ประเภท', 'เริ่มพัก', 'กลับเข้า', 'ใช้เวลา(นาที)', 'สถานะ'];
+      const lines = [headers.join(',')];
+      monthLogs.forEach((l) => {
+        lines.push([
+          mk, l.dateKey, l.empId, `"${l.empName}"`, `"${l.zone || ''}"`,
+          l.breakType === 'MEAL' ? 'พักทานข้าว' : 'พักเบรกหนาว',
+          l.startTime, l.endTime, l.durationMins || Math.round((l.durationSec || 0) / 60),
+          l.isOvertime ? 'เกินเวลา' : 'ตรงเวลา'
+        ].join(','));
+      });
+      triggerFileDownload('\uFEFF' + lines.join('\n'), `ColdRoom_Monthly_Archive_${mk}.csv`, 'text/csv;charset=utf-8;');
+      showToast(`ดาวน์โหลดสรุปข้อมูลประจำเดือน ${mk} (${monthLogs.length} รายการ) แล้ว`, 'success');
+    }
+
+    function exportFullDatabaseJSON() {
+      const payload = { exportedAt: new Date().toISOString(), appVersion: '5.0-clean', data: appState };
+      triggerFileDownload(JSON.stringify(payload, null, 2), `ColdRoom_FullBackup_${getRelativeDateKey(0)}.json`, 'application/json');
+      showToast('สำรองฐานข้อมูลทั้งหมด (.JSON) เรียบร้อยแล้ว', 'success');
+    }
+
+    function importFullDatabaseJSON(event) {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          const restored = parsed.data || parsed;
+          if (!Array.isArray(restored.employees)) throw new Error('Invalid format');
+          appState.employees = restored.employees;
+          appState.activeBreaks = restored.activeBreaks || [];
+          appState.historyLogs = restored.historyLogs || [];
+          appState.dailyOtByDate = restored.dailyOtByDate || {};
+          appState.archiveHistory = restored.archiveHistory || [];
+          saveState();
+          renderAll();
+          showToast('กู้คืนฐานข้อมูลจากไฟล์ .JSON สำเร็จแล้ว', 'success');
+        } catch (err) {
+          showToast('ไฟล์สำรอง .JSON ไม่ถูกต้อง', 'error');
+        }
+        event.target.value = '';
+      };
+      reader.readAsText(file, 'UTF-8');
+    }
+
+    /**************************************************************************
+     * 11. GOOGLE SHEETS SYNC ENGINE (SEQUENTIAL QUEUE + 12s TIMEOUT)
+     **************************************************************************/
+    function shouldAutoSyncToGoogleSheet() {
+      const url = getGoogleSheetUrl();
+      return Boolean(url && url.includes('/exec') && isGoogleSheetAutoSyncEnabled());
+    }
+
+    function updateSyncStatusUI(state, text) {
+      const badge = document.getElementById('headerSyncBadge');
+      const pill = document.getElementById('kioskSyncPill');
+      const backendStat = document.getElementById('statBackendSyncTime');
+
+      const map = {
+        idle: { cls: 'bg-slate-100 text-slate-600 border-slate-200', dot: 'bg-slate-400' },
+        syncing: { cls: 'bg-amber-50 text-amber-700 border-amber-200', dot: 'bg-amber-500 animate-ping' },
+        ok: { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500' },
+        error: { cls: 'bg-rose-50 text-rose-700 border-rose-200', dot: 'bg-rose-500' }
+      };
+      const cfg = map[state] || map.idle;
+      if (badge) {
+        badge.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold border ${cfg.cls}`;
+        badge.innerHTML = `<span class="w-2 h-2 rounded-full ${cfg.dot}"></span><span>${escapeHtml(text)}</span>`;
+      }
+      if (pill) {
+        pill.className = `px-2.5 py-1 rounded-full text-[11px] font-bold border ${cfg.cls}`;
+        pill.textContent = text;
+      }
+      if (backendStat) backendStat.textContent = text;
+    }
+
+    async function fetchWithTimeout(url, options = {}, timeoutMs = GSHEET_FETCH_TIMEOUT_MS) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
+      try {
+        return await fetch(url, { ...options, signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+
+    function enqueueGoogleSheetSync(payload, showSuccessToast = false) {
+      const url = getGoogleSheetUrl();
+      if (!url || !url.includes('/exec')) {
+        if (showSuccessToast) showToast('กรุณาวางลิงก์ Google Apps Script (/exec) ในแท็บที่ 4 ก่อน', 'warning');
+        return;
+      }
+      lastPushTimestampMs = Date.now();
+      gsSyncQueue.push({ payload, showSuccessToast });
+      processGoogleSheetQueue();
+    }
+
+    async function processGoogleSheetQueue() {
+      if (isProcessingGsQueue || gsSyncQueue.length === 0) return;
+      isProcessingGsQueue = true;
+
+      try {
+        while (gsSyncQueue.length > 0) {
+          const { payload, showSuccessToast } = gsSyncQueue.shift();
+          const url = getGoogleSheetUrl();
+          if (!url || !url.includes('/exec')) continue;
+
+          updateSyncStatusUI('syncing', 'กำลังส่งเข้า Sheet...');
+          try {
+            const res = await fetchWithTimeout(url, {
+              method: 'POST',
+              headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+              body: JSON.stringify(payload)
+            });
+
+            const text = await res.text();
+            let parsed = null;
+            try { parsed = JSON.parse(text); } catch (e) {}
+
+            if (parsed && parsed.ok === false) {
+              throw new Error(parsed.error || 'Apps Script error');
+            }
+
+            if (parsed && Array.isArray(parsed.archiveHistory)) {
+              appState.archiveHistory = parsed.archiveHistory;
+              saveState();
+              if (currentTab === 'backend') renderBackendTab();
+            }
+
+            lastPushTimestampMs = Date.now();
+            const tStr = formatTimeHMS(new Date());
+            updateSyncStatusUI('ok', `ส่งเข้า Sheet แล้ว (${tStr})`);
+            if (showSuccessToast) {
+              showToast(parsed?.message || `ซิงค์ข้อมูล (${payload.action}) ขึ้น Google Sheets สำเร็จ`, 'success');
+            }
+          } catch (err) {
+            // Fallback mode: no-cors (สำหรับบางเบราว์เซอร์ที่ติด CORS redirect ของ Google)
+            if (err.name !== 'AbortError') {
+              try {
+                await fetchWithTimeout(url, {
+                  method: 'POST',
+                  mode: 'no-cors',
+                  headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                  body: JSON.stringify(payload)
+                }, 8000);
+                lastPushTimestampMs = Date.now();
+                updateSyncStatusUI('ok', `ส่งเข้า Sheet แล้ว (${formatTimeHMS(new Date())})`);
+                if (showSuccessToast) showToast(`ส่งคำสั่ง (${payload.action}) ไปยัง Google Sheets แล้ว`, 'success');
+                continue;
+              } catch (e2) {}
+            }
+            updateSyncStatusUI('error', 'ส่ง Sheet ไม่สำเร็จ (ตรวจ URL/สิทธิ์)');
+            if (showSuccessToast) showToast(`เชื่อมต่อ Google Sheets ไม่สำเร็จ: ${err.message}`, 'error');
+          }
+        }
+      } finally {
+        isProcessingGsQueue = false;
+      }
+    }
+
+    async function pullDataFromGoogleSheet(silent = true) {
+      const url = getGoogleSheetUrl();
+      if (!url || !url.includes('/exec')) return;
+      if (isPullingFromGoogleSheet || isProcessingGsQueue) return;
+      if (silent && (Date.now() - lastPushTimestampMs) < 12000) return;
+
+      isPullingFromGoogleSheet = true;
+      try {
+        if (!silent) updateSyncStatusUI('syncing', 'กำลังดึงข้อมูลจาก Sheet...');
+        const res = await fetchWithTimeout(`${url}?action=getAll&t=${Date.now()}`);
+        const data = await res.json();
+        if (!data || !data.ok) throw new Error(data?.error || 'Invalid response');
+
+        const sig = JSON.stringify({
+          e: data.employees?.length || 0,
+          a: data.activeBreaks || [],
+          l: data.historyLogs?.length || 0,
+          h: data.archiveHistory?.length || 0
+        });
+
+        if (sig !== lastPulledSignature || !silent) {
+          lastPulledSignature = sig;
+          if (Array.isArray(data.employees)) appState.employees = data.employees;
+          if (Array.isArray(data.activeBreaks)) appState.activeBreaks = data.activeBreaks;
+          if (Array.isArray(data.historyLogs)) appState.historyLogs = data.historyLogs;
+          if (data.dailyOtByDate && typeof data.dailyOtByDate === 'object') appState.dailyOtByDate = data.dailyOtByDate;
+          if (Array.isArray(data.archiveHistory)) appState.archiveHistory = data.archiveHistory;
+          saveState();
+          renderAll();
+        }
+
+        updateSyncStatusUI('ok', `ซิงค์ Sheet แล้ว (${formatTimeHMS(new Date())})`);
+        if (!silent) showToast('ดึงข้อมูลล่าสุดจาก Google Sheets เข้าแอปเรียบร้อยแล้ว', 'success');
+      } catch (err) {
+        if (!silent) {
+          updateSyncStatusUI('error', 'ดึงข้อมูล Sheet ไม่สำเร็จ');
+          showToast('ไม่สามารถดึงข้อมูลจาก Google Sheets ได้ กรุณาตรวจสอบสิทธิ์ "ทุกคน (Anyone)"', 'error');
+        }
+      } finally {
+        isPullingFromGoogleSheet = false;
+      }
+    }
+
+    function saveGoogleSheetConfig(silent = false) {
+      const url = (document.getElementById('gsUrlInput')?.value || '').trim();
+      const auto = Boolean(document.getElementById('gsAutoSyncToggle')?.checked);
+      const mode = document.getElementById('gsLogModeSelect')?.value || 'ROLLING_LIMIT';
+
+      localStorage.setItem(STORAGE_KEY_GS_URL, url);
+      localStorage.setItem(STORAGE_KEY_GS_AUTO, String(auto));
+      localStorage.setItem(STORAGE_KEY_GS_MODE, mode);
+      appState.settings.googleSheetWebAppUrl = url;
+      appState.settings.googleSheetAutoSync = auto;
+      appState.settings.googleSheetLogMode = mode;
+      saveState();
+
+      if (url && url.includes('/exec')) {
+        updateSyncStatusUI('ok', auto ? 'Auto-Sync Sheet: พร้อมทำงาน' : 'เชื่อมต่อ Sheet แล้ว (Manual)');
+        if (!silent) showToast('บันทึกการตั้งค่า Google Sheets เรียบร้อยแล้ว', 'success');
+      } else {
+        updateSyncStatusUI('idle', 'โหมด Local (ยังไม่ได้ใส่ลิงก์ Sheet)');
+      }
+    }
+
+    function testGoogleSheetConnection() {
+      enqueueGoogleSheetSync({ action: 'TEST_PING', timestamp: new Date().toISOString() }, true);
+    }
+
+    function pushLiveStateToGoogleSheet(showToastFlag = true) {
+      enqueueGoogleSheetSync({ action: 'SYNC_ACTIVE', activeBreaks: appState.activeBreaks }, showToastFlag);
+    }
+
+    function syncEmployeesToGoogleSheet() {
+      enqueueGoogleSheetSync({ action: 'SYNC_EMPLOYEES', employees: appState.employees }, true);
+    }
+
+    function syncAllLogsToGoogleSheet() {
+      enqueueGoogleSheetSync({
+        action: 'SYNC_ALL_LOGS',
+        logMode: getGoogleSheetLogMode(),
+        historyLogs: appState.historyLogs
+      }, true);
+    }
+
+    function syncQuotaToGoogleSheet() {
+      const todayKey = getRelativeDateKey(0);
+      const rows = appState.employees.map((emp) => {
+        const q = calculateEmployeeQuota(emp, todayKey);
+        return { dateKey: todayKey, empId: emp.id, empName: emp.name, nickname: emp.nickname || '', zone: emp.zone || '', ...q };
+      });
+      enqueueGoogleSheetSync({ action: 'SYNC_QUOTA', dateKey: todayKey, quotaRows: rows }, true);
+    }
+
+    function triggerSetupMonthlyArchive() {
+      enqueueGoogleSheetSync({ action: 'SETUP_MONTHLY_TRIGGER' }, true);
+    }
+
+    function runManualMonthArchive() {
+      const mk = document.getElementById('archiveMonthPicker')?.value || getCurrentMonthKey();
+      const cleanupDays = document.getElementById('chkCleanupAfterArchive')?.checked ? 30 : 0;
+      enqueueGoogleSheetSync({
+        action: 'ARCHIVE_MONTH_NOW',
+        monthKey: mk,
+        forceOverwrite: true,
+        cleanupOlderThanDays: cleanupDays
+      }, true);
+    }
+
+    /**************************************************************************
+     * 12. COMPLETE GOOGLE APPS SCRIPT (Code.gs) & TV MONITOR (tv.html) GENERATORS
+     **************************************************************************/
+    function getGoogleAppsScriptTemplateCode() {
+      return [
+        '// ============================================================================',
+        '// COLD ROOM BREAK TRACKER - GOOGLE APPS SCRIPT BACKEND (Code.gs v5.0)',
+        '// รองรับ: Active_Breaks (มีเวลาเริ่ม/ครบกำหนด), Break_Logs (เขียนทับไม่ซ้ำแถว),',
+        '//         Monthly Auto-Archive ลง Google Drive ก่อนล้างข้อมูลเก่า 30 วัน,',
+        '//         CLEAR_SHEET_DATA และทำงานคู่กับ GitHub Pages + tv.html',
+        '// ============================================================================',
+        '',
+        'var ARCHIVE_FOLDER_NAME = "ColdRoom_Monthly_Archives";',
+        'var TIMEZONE = "Asia/Bangkok";',
+        '',
+        'function ensureSheets_(ss) {',
+        '  var defs = [',
+        '    { name: "Active_Breaks", headers: ["empId","empName","nickname","myanmarName","zone","breakType","limitMinutes","startTime","expectedEndTime","startTimestamp","dateKey"] },',
+        '    { name: "Break_Logs", headers: ["dateKey","savedAt","eventType","empId","pin","empName","nickname","zone","breakType","startTime","endTime","limitMinutes","durationText","status","totalUsedMins","totalQuotaMins","remainingMins","note","startTimestamp","durationSec","durationMins","isOvertime","id"] },',
+        '    { name: "Daily_Quota", headers: ["dateKey","empId","empName","nickname","zone","otHours","coldUsedMins","coldQuotaMins","mealUsedMins","mealQuotaMins","totalUsedMins","totalQuotaMins","remainingMins","status"] },',
+        '    { name: "Employees", headers: ["id","pin","name","nickname","myanmarName","nation","zone","role","otHours"] },',
+        '    { name: "Daily_OT", headers: ["otKey","otHours","updatedAt"] },',
+        '    { name: "Archive_History", headers: ["monthKey","fileName","fileId","fileUrl","logCount","archivedAt","note"] }',
+        '  ];',
+        '  defs.forEach(function(d) {',
+        '    var sh = ss.getSheetByName(d.name);',
+        '    if (!sh) {',
+        '      sh = ss.insertSheet(d.name);',
+        '      sh.appendRow(d.headers);',
+        '      sh.getRange(1, 1, 1, d.headers.length).setBackground("#0284C7").setFontColor("#FFFFFF").setFontWeight("bold");',
+        '      sh.setFrozenRows(1);',
+        '    }',
+        '  });',
+        '}',
+        '',
+        'function jsonResponse_(obj) {',
+        '  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);',
+        '}',
+        '',
+        'function doGet(e) {',
+        '  var ss = SpreadsheetApp.getActiveSpreadsheet();',
+        '  ensureSheets_(ss);',
+        '  var activeBreaks = readSheetObjects_(ss.getSheetByName("Active_Breaks")).map(function(a) {',
+        '    a.limitMinutes = Number(a.limitMinutes) || 15;',
+        '    a.startTimestamp = Number(a.startTimestamp) || Date.now();',
+        '    return a;',
+        '  });',
+        '  var historyLogs = readSheetObjects_(ss.getSheetByName("Break_Logs")).filter(function(r) {',
+        '    return r.empId && r.eventType !== "START_BREAK";',
+        '  }).map(function(l) {',
+        '    l.limitMinutes = Number(l.limitMinutes) || 15;',
+        '    l.durationSec = Number(l.durationSec) || 0;',
+        '    l.durationMins = Number(l.durationMins) || 0;',
+        '    l.isOvertime = String(l.isOvertime).toLowerCase() === "true" || String(l.status).indexOf("OVERTIME") !== -1;',
+        '    return l;',
+        '  }).reverse();',
+        '  var employees = readSheetObjects_(ss.getSheetByName("Employees")).map(function(emp) {',
+        '    emp.otHours = Number(emp.otHours) || 0;',
+        '    return emp;',
+        '  });',
+        '  var dailyOtByDate = {};',
+        '  readSheetObjects_(ss.getSheetByName("Daily_OT")).forEach(function(r) {',
+        '    if (r.otKey) dailyOtByDate[r.otKey] = Number(r.otHours) || 0;',
+        '  });',
+        '  var archiveHistory = readSheetObjects_(ss.getSheetByName("Archive_History")).reverse();',
+        '  return jsonResponse_({ ok: true, activeBreaks: activeBreaks, historyLogs: historyLogs, breakLogs: historyLogs, employees: employees, dailyOtByDate: dailyOtByDate, dailyOtMap: dailyOtByDate, archiveHistory: archiveHistory });',
+        '}',
+        '',
+        'function doPost(e) {',
+        '  var lock = LockService.getScriptLock();',
+        '  lock.waitLock(15000);',
+        '  try {',
+        '    var ss = SpreadsheetApp.getActiveSpreadsheet();',
+        '    ensureSheets_(ss);',
+        '    var body = JSON.parse(e.postData.contents || "{}");',
+        '    var action = String(body.action || "");',
+        '    var logMode = String(body.logMode || "ROLLING_LIMIT");',
+        '    var nowStr = Utilities.formatDate(new Date(), TIMEZONE, "HH:mm:ss");',
+        '    var todayKey = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd");',
+        '',
+        '    if (action === "TEST_PING") {',
+        '      return jsonResponse_({ ok: true, message: "เชื่อมต่อ Google Sheets สำเร็จ (" + nowStr + ")" });',
+        '    }',
+        '    if (action === "SETUP_MONTHLY_TRIGGER") {',
+        '      setupMonthlyAutoArchiveTrigger();',
+        '      return jsonResponse_({ ok: true, message: "เปิดระบบตั้งเวลาปิดยอดสิ้นเดือนอัตโนมัติ (23:00 น.) แล้ว" });',
+        '    }',
+        '    if (action === "ARCHIVE_MONTH_NOW") {',
+        '      var mk = String(body.monthKey || "").trim() || Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM");',
+        '      var res = archiveMonthToDrive_(ss, mk, { forceOverwrite: Boolean(body.forceOverwrite), cleanupOlderThanDays: Number(body.cleanupOlderThanDays || 0) });',
+        '      res.archiveHistory = readSheetObjects_(ss.getSheetByName("Archive_History")).reverse();',
+        '      return jsonResponse_(res);',
+        '    }',
+        '    if (action === "CLEAR_SHEET_DATA") {',
+        '      var targets = ["Active_Breaks", "Break_Logs", "Daily_Quota", "Daily_OT"];',
+        '      if (body.clearEmployees) targets.push("Employees");',
+        '      targets.forEach(function(name) {',
+        '        var sh = ss.getSheetByName(name);',
+        '        if (sh && sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, sh.getLastColumn()).clearContent();',
+        '      });',
+        '      return jsonResponse_({ ok: true, message: "ล้างข้อมูลใน Google Sheets เรียบร้อยแล้ว", clearedSheets: targets });',
+        '    }',
+        '',
+        '    if (Array.isArray(body.activeBreaks)) {',
+        '      overwriteActiveBreaks_(ss.getSheetByName("Active_Breaks"), body.activeBreaks);',
+        '    }',
+        '    if (action === "START_BREAK" && body.session) {',
+        '      upsertBreakLogRow_(ss, body.session, "START_BREAK", body.quota || {}, logMode, nowStr, todayKey);',
+        '    }',
+        '    if (action === "END_BREAK" && body.logItem) {',
+        '      upsertBreakLogRow_(ss, body.logItem, "END_BREAK", body.quota || {}, logMode, nowStr, todayKey);',
+        '    }',
+        '    if (action === "SYNC_EMPLOYEES" && Array.isArray(body.employees)) {',
+        '      overwriteSheetObjects_(ss.getSheetByName("Employees"), ["id","pin","name","nickname","myanmarName","nation","zone","role","otHours"], body.employees);',
+        '    }',
+        '    if (action === "SYNC_OT" && body.dailyOtByDate) {',
+        '      var otRows = Object.keys(body.dailyOtByDate).map(function(k){ return { otKey: k, otHours: body.dailyOtByDate[k], updatedAt: nowStr }; });',
+        '      overwriteSheetObjects_(ss.getSheetByName("Daily_OT"), ["otKey","otHours","updatedAt"], otRows);',
+        '    }',
+        '    if (action === "SYNC_QUOTA" && Array.isArray(body.quotaRows)) {',
+        '      var qRows = body.quotaRows.map(function(r){ r.status = r.isOverQuota ? "OVER_QUOTA" : "OK"; return r; });',
+        '      overwriteSheetObjects_(ss.getSheetByName("Daily_Quota"), ["dateKey","empId","empName","nickname","zone","otHours","coldUsedMins","coldQuotaMins","mealUsedMins","mealQuotaMins","totalUsedMins","totalQuotaMins","remainingMins","status"], qRows);',
+        '    }',
+        '    if (action === "SYNC_ALL_LOGS" && Array.isArray(body.historyLogs)) {',
+        '      var shLog = ss.getSheetByName("Break_Logs");',
+        '      var rows = body.historyLogs.slice().reverse().map(function(l) {',
+        '        return [l.dateKey || todayKey, nowStr, "END_BREAK", l.empId, l.pin || l.empId, l.empName, l.nickname || "", l.zone || "", l.breakType || "COLD", l.startTime || "", l.endTime || "", Number(l.limitMinutes)||15, l.durationText || "", l.isOvertime ? "OVERTIME" : "ONTIME", 0, 200, 200, l.note || "", l.startTimestamp || "", Number(l.durationSec)||0, Number(l.durationMins)||0, Boolean(l.isOvertime), l.id || ""];',
+        '      });',
+        '      if (shLog.getLastRow() > 1) shLog.getRange(2, 1, shLog.getLastRow() - 1, shLog.getLastColumn()).clearContent();',
+        '      if (rows.length > 0) shLog.getRange(2, 1, rows.length, rows[0].length).setValues(rows);',
+        '    }',
+        '    return jsonResponse_({ ok: true, action: action, savedAt: nowStr });',
+        '  } catch (err) {',
+        '    return jsonResponse_({ ok: false, error: String(err) });',
+        '  } finally {',
+        '    lock.releaseLock();',
+        '  }',
+        '}',
+        '',
+        'function overwriteActiveBreaks_(sh, list) {',
+        '  var headers = ["empId","empName","nickname","myanmarName","zone","breakType","limitMinutes","startTime","expectedEndTime","startTimestamp","dateKey"];',
+        '  overwriteSheetObjects_(sh, headers, list);',
+        '}',
+        '',
+        'function upsertBreakLogRow_(ss, item, eventType, quota, logMode, nowStr, todayKey) {',
+        '  var sh = ss.getSheetByName("Break_Logs");',
+        '  var rowData = [',
+        '    item.dateKey || todayKey, nowStr, eventType, item.empId || "", item.pin || item.empId || "",',
+        '    item.empName || "", item.nickname || "", item.zone || "", item.breakType || "COLD",',
+        '    item.startTime || "", eventType === "END_BREAK" ? (item.endTime || nowStr) : "-",',
+        '    Number(item.limitMinutes) || 15,',
+        '    eventType === "END_BREAK" ? (item.durationText || "") : "กำลังพัก...",',
+        '    eventType === "END_BREAK" ? (item.isOvertime ? "OVERTIME" : "ONTIME") : "ACTIVE",',
+        '    Number(quota.totalUsedMins || 0), Number(quota.totalQuotaMins || 200), Number(quota.remainingMins || 200),',
+        '    item.note || "", String(item.startTimestamp || ""), Number(item.durationSec || 0),',
+        '    Number(item.durationMins || 0), Boolean(item.isOvertime), item.id || ""',
+        '  ];',
+        '',
+        '  var lastRow = sh.getLastRow();',
+        '  var values = lastRow > 1 ? sh.getRange(2, 1, lastRow - 1, rowData.length).getValues() : [];',
+        '  var matchIdx = -1;',
+        '',
+        '  for (var i = values.length - 1; i >= 0; i--) {',
+        '    var sameEmp = String(values[i][3]) === String(item.empId);',
+        '    if (logMode === "OVERWRITE_BY_EMPLOYEE" && sameEmp) { matchIdx = i; break; }',
+        '    if (eventType === "END_BREAK" && sameEmp && String(values[i][2]) === "START_BREAK" && String(values[i][18]) === String(item.startTimestamp || "")) {',
+        '      matchIdx = i; break;',
+        '    }',
+        '    if (eventType === "END_BREAK" && sameEmp && String(values[i][2]) === "START_BREAK") {',
+        '      matchIdx = i; break;',
+        '    }',
+        '  }',
+        '',
+        '  if (matchIdx !== -1) {',
+        '    values[matchIdx] = rowData;',
+        '  } else {',
+        '    values.push(rowData);',
+        '  }',
+        '',
+        '  if (logMode === "TODAY_ONLY") {',
+        '    values = values.filter(function(r) { return String(r[0]) === todayKey; });',
+        '  } else if (logMode === "ROLLING_LIMIT") {',
+        '    values = filterRollingLogsSafely_(ss, values, 30, 2000);',
+        '  }',
+        '',
+        '  if (lastRow > 1) sh.getRange(2, 1, lastRow - 1, rowData.length).clearContent();',
+        '  if (values.length > 0) sh.getRange(2, 1, values.length, rowData.length).setValues(values);',
+        '}',
+        '',
+        'function filterRollingLogsSafely_(ss, values, keepDays, maxRows) {',
+        '  var cutoff = new Date(); cutoff.setDate(cutoff.getDate() - keepDays);',
+        '  var cutoffStr = Utilities.formatDate(cutoff, TIMEZONE, "yyyy-MM-dd");',
+        '  var archivedMonths = {};',
+        '  readSheetObjects_(ss.getSheetByName("Archive_History")).forEach(function(a) { archivedMonths[a.monthKey] = true; });',
+        '  var filtered = values.filter(function(r) {',
+        '    var dk = String(r[0] || "");',
+        '    if (!dk || dk >= cutoffStr) return true;',
+        '    var mk = dk.slice(0, 7);',
+        '    // ป้องกันข้อมูลหาย: ลบเฉพาะเดือนที่ถูกสำรองไฟล์ใน Google Drive แล้วเท่านั้น',
+        '    return !archivedMonths[mk];',
+        '  });',
+        '  if (filtered.length > maxRows) filtered = filtered.slice(filtered.length - maxRows);',
+        '  return filtered;',
+        '}',
+        '',
+        'function setupMonthlyAutoArchiveTrigger() {',
+        '  ScriptApp.getProjectTriggers().forEach(function(t) {',
+        '    if (t.getHandlerFunction() === "runEndOfMonthAutoArchive") ScriptApp.deleteTrigger(t);',
+        '  });',
+        '  ScriptApp.newTrigger("runEndOfMonthAutoArchive").timeBased().everyDays(1).atHour(23).create();',
+        '}',
+        '',
+        'function runEndOfMonthAutoArchive() {',
+        '  var now = new Date();',
+        '  var tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);',
+        '  if (tomorrow.getDate() !== 1) return; // ทำงานเฉพาะวันสิ้นเดือนเท่านั้น',
+        '  var ss = SpreadsheetApp.getActiveSpreadsheet();',
+        '  ensureSheets_(ss);',
+        '  var monthKey = Utilities.formatDate(now, TIMEZONE, "yyyy-MM");',
+        '  archiveMonthToDrive_(ss, monthKey, { forceOverwrite: true, cleanupOlderThanDays: 30 });',
+        '}',
+        '',
+        'function archiveMonthToDrive_(ss, monthKey, opts) {',
+        '  var folders = DriveApp.getFoldersByName(ARCHIVE_FOLDER_NAME);',
+        '  var folder = folders.hasNext() ? folders.next() : DriveApp.createFolder(ARCHIVE_FOLDER_NAME);',
+        '  var fileName = "ColdRoom_Break_Archive_" + monthKey;',
+        '  var logSheet = ss.getSheetByName("Break_Logs");',
+        '  var allLogs = logSheet.getDataRange().getValues();',
+        '  var header = allLogs[0] || [];',
+        '  var monthRows = allLogs.slice(1).filter(function(r) { return String(r[0] || "").indexOf(monthKey) === 0; });',
+        '',
+        '  var newSS = SpreadsheetApp.create(fileName);',
+        '  var file = DriveApp.getFileById(newSS.getId());',
+        '  folder.addFile(file);',
+        '  DriveApp.getRootFolder().removeFile(file);',
+        '',
+        '  var sh1 = newSS.getSheets()[0];',
+        '  sh1.setName("Break_Logs_" + monthKey);',
+        '  sh1.appendRow(header);',
+        '  if (monthRows.length > 0) sh1.getRange(2, 1, monthRows.length, header.length).setValues(monthRows);',
+        '',
+        '  var empSh = newSS.insertSheet("Employees_Snapshot");',
+        '  var empData = ss.getSheetByName("Employees").getDataRange().getValues();',
+        '  if (empData.length > 0) empSh.getRange(1, 1, empData.length, empData[0].length).setValues(empData);',
+        '',
+        '  var archSh = ss.getSheetByName("Archive_History");',
+        '  var nowFull = Utilities.formatDate(new Date(), TIMEZONE, "yyyy-MM-dd HH:mm:ss");',
+        '  archSh.appendRow([monthKey, fileName, newSS.getId(), newSS.getUrl(), monthRows.length, nowFull, "Auto/Manual Archive"]);',
+        '',
+        '  if (opts && opts.cleanupOlderThanDays > 0 && allLogs.length > 1) {',
+        '    var kept = filterRollingLogsSafely_(ss, allLogs.slice(1), opts.cleanupOlderThanDays, 5000);',
+        '    logSheet.getRange(2, 1, logSheet.getLastRow() - 1, header.length).clearContent();',
+        '    if (kept.length > 0) logSheet.getRange(2, 1, kept.length, header.length).setValues(kept);',
+        '  }',
+        '  return { ok: true, message: "ปิดยอดและบันทึกไฟล์ " + fileName + " ลง Google Drive แล้ว (" + monthRows.length + " รายการ)", fileUrl: newSS.getUrl() };',
+        '}',
+        '',
+        'function readSheetObjects_(sh) {',
+        '  if (!sh || sh.getLastRow() <= 1) return [];',
+        '  var data = sh.getDataRange().getValues();',
+        '  var h = data[0];',
+        '  return data.slice(1).map(function(row) {',
+        '    var obj = {};',
+        '    h.forEach(function(k, i) { obj[k] = row[i]; });',
+        '    return obj;',
+        '  });',
+        '}',
+        '',
+        'function overwriteSheetObjects_(sh, headers, items) {',
+        '  if (sh.getLastRow() > 1) sh.getRange(2, 1, sh.getLastRow() - 1, Math.max(sh.getLastColumn(), headers.length)).clearContent();',
+        '  sh.getRange(1, 1, 1, headers.length).setValues([headers]);',
+        '  if (!items || items.length === 0) return;',
+        '  var rows = items.map(function(it) { return headers.map(function(k) { return it[k] !== undefined && it[k] !== null ? it[k] : ""; }); });',
+        '  sh.getRange(2, 1, rows.length, headers.length).setValues(rows);',
+        '}'
+      ].join('\n');
+    }
+
+    function openAppsScriptModal() {
+      document.getElementById('appsScriptCodeDisplay').textContent = getGoogleAppsScriptTemplateCode();
+      const modal = document.getElementById('appsScriptModal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closeAppsScriptModal() {
+      const modal = document.getElementById('appsScriptModal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function copyAppsScriptCode() {
+      const code = getGoogleAppsScriptTemplateCode();
+      const ta = document.createElement('textarea');
+      ta.value = code;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+      showToast('คัดลอกโค้ด Code.gs เรียบร้อยแล้ว นำไปวางใน Apps Script ได้เลย', 'success');
+    }
+
+    function downloadAppsScriptFile() {
+      triggerFileDownload(getGoogleAppsScriptTemplateCode(), 'Code.gs', 'text/plain;charset=utf-8;');
+      showToast('ดาวน์โหลดไฟล์ Code.gs เรียบร้อยแล้ว', 'success');
+    }
+
+    function buildTvHtmlContent() {
+      const embeddedUrl = getGoogleSheetUrl();
+      return [
+        '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1.0">',
+        '<title>TV Live Monitor - ระบบพักเบรกหนาว (View Only)</title>',
+        '<script src="https://cdn.tailwindcss.com"></scr' + 'ipt>',
+        '<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Prompt:wght@400;600;700;800&display=swap" rel="stylesheet">',
+        '<style>body{font-family:"Prompt",sans-serif;background:linear-gradient(135deg,#F8FAFC,#EFF6FF);color:#0F172A;user-select:none}.mono{font-family:"JetBrains Mono",monospace}@keyframes pr{0%,100%{background:#FEF2F2;border-color:#DC2626}50%{background:#FEE2E2;border-color:#EF4444}}.ov{animation:pr 1.3s infinite}</style>',
+        '</head><body class="p-4 lg:p-6 min-h-screen flex flex-col gap-4">',
+        '<header class="bg-white border border-slate-200 rounded-2xl px-6 py-4 flex flex-wrap justify-between items-center gap-4 shadow-sm">',
+        '<div><span class="px-2.5 py-0.5 rounded-full text-xs font-bold bg-sky-100 text-sky-800">TV MONITOR ONLY • ดูอย่างเดียว</span>',
+        '<h1 class="text-2xl font-extrabold mt-1">กระดานติดตามเวลาพักเบรกห้องเย็น (Live TV)</h1></div>',
+        '<div class="flex items-center gap-4"><div class="text-right"><div id="dt" class="text-xs text-slate-500"></div><div id="ck" class="text-4xl font-extrabold mono">00:00:00</div></div>',
+        '<button onclick="document.documentElement.requestFullscreen?.()" class="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold">⛶ เต็มจอ TV</button></div></header>',
+        '<section id="board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 flex-1 content-start"></section>',
+        '<scr' + 'ipt>',
+        `const SCRIPT_URL = ${JSON.stringify(embeddedUrl)};`,
+        'let activeBreaks = [];',
+        'function fmt(s){const a=Math.abs(Math.floor(s));return String(Math.floor(a/60)).padStart(2,"0")+":"+String(a%60).padStart(2,"0");}',
+        'function loadLocal(){try{const r=localStorage.getItem("CR_ACTIVE_BREAKS");if(r)activeBreaks=JSON.parse(r);}catch(e){}}',
+        'async function pull(){if(!SCRIPT_URL||!SCRIPT_URL.includes("/exec")){loadLocal();render();return;}try{const res=await fetch(SCRIPT_URL+"?action=getAll&t="+Date.now());const d=await res.json();if(d&&d.ok&&Array.isArray(d.activeBreaks)){activeBreaks=d.activeBreaks;render();}}catch(e){loadLocal();render();}}',
+        'function render(){const now=Date.now();document.getElementById("ck").textContent=new Date().toLocaleTimeString("th-TH",{hour12:false});document.getElementById("dt").textContent=new Date().toLocaleDateString("th-TH",{weekday:"long",day:"numeric",month:"long",year:"numeric"});const b=document.getElementById("board");if(!activeBreaks.length){b.innerHTML=\'<div class="col-span-full bg-white rounded-2xl border-2 border-dashed border-slate-200 py-24 text-center"><div class="text-5xl mb-2">❄️</div><div class="text-2xl font-extrabold text-slate-700">ขณะนี้ไม่มีพนักงานกำลังพักเบรก</div></div>\';return;}b.innerHTML=activeBreaks.map(it=>{const lim=(Number(it.limitMinutes)||15)*60;const rem=lim-Math.max(0,Math.floor((now-Number(it.startTimestamp))/1000));const isOv=rem<0;return `<div class="${isOv?"ov border-2":"bg-white border-2 border-sky-200"} rounded-2xl p-5 shadow-sm flex flex-col justify-between gap-3"><div><span class="px-2 py-0.5 rounded bg-slate-900 text-white text-xs font-bold mono">${it.empId}</span> <span class="text-xs font-bold text-sky-700">${it.breakType==="MEAL"?"🍱 ทานข้าว":"❄️ เบรกหนาว"}</span><h2 class="text-2xl font-extrabold mt-1">${it.empName||it.empId}</h2><p class="text-xs text-slate-500">${it.zone||""}</p></div><div class="text-5xl font-extrabold mono ${isOv?"text-red-600":"text-sky-600"} text-right">${isOv?"+":""}${fmt(rem)}</div></div>`;}).join("");}',
+        'window.addEventListener("storage",()=>{loadLocal();render();});',
+        'loadLocal();render();pull();setInterval(render,1000);setInterval(pull,10000);',
+        '</scr' + 'ipt></body></html>'
+      ].join('');
+    }
+
+    function downloadTvHtmlFile() {
+      triggerFileDownload(buildTvHtmlContent(), 'tv.html', 'text/html;charset=utf-8;');
+      showToast('ดาวน์โหลดไฟล์ tv.html (ฝังลิงก์ Google Sheets แล้ว) เรียบร้อย', 'success');
+    }
+
+    function openTvMonitorWindow() {
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.open();
+        win.document.write(buildTvHtmlContent());
+        win.document.close();
+      } else {
+        downloadTvHtmlFile();
+      }
+    }
+
+    function toggleSoundSetting() {
+      appState.settings.soundEnabled = !appState.settings.soundEnabled;
+      saveState();
+      renderSoundButton();
+    }
+
+    function renderSoundButton() {
+      const icon = document.getElementById('headerSoundIcon');
+      const label = document.getElementById('headerSoundLabel');
+      const on = appState.settings.soundEnabled;
+      if (icon) icon.className = on ? 'fa-solid fa-volume-high text-sky-600' : 'fa-solid fa-volume-xmark text-slate-400';
+      if (label) label.textContent = on ? 'เสียง: เปิด' : 'เสียง: ปิด';
+    }
+
+    function renderAll() {
+      renderSoundButton();
+      renderKPIHeader();
+      renderQuickScanChips();
+      renderActiveBreakBoard();
+      renderKioskQuotaMiniGrid();
+      if (currentTab === 'quota') renderQuotaTable();
+      if (currentTab === 'history') renderHistoryTable();
+      if (currentTab === 'backend') renderBackendTab();
+      if (currentTab === 'staff') renderStaffCards();
+    }
+
+    /**************************************************************************
+     * 13. GLOBAL RF BARCODE SCANNER LISTENER & BOOTSTRAP
+     **************************************************************************/
+    document.addEventListener('keydown', (e) => {
+      const tag = (document.activeElement?.tagName || '').toUpperCase();
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (currentTab !== 'kiosk') return;
+
+      const now = Date.now();
+      if (now - rfLastKeyTime > 120) rfBuffer = '';
+      rfLastKeyTime = now;
+
+      if (e.key === 'Enter' && rfBuffer.length >= 2) {
+        e.preventDefault();
+        const code = rfBuffer;
+        rfBuffer = '';
+        processEmployeeScan(code, 'RF Scanner Code_128');
+      } else if (e.key.length === 1) {
+        rfBuffer += e.key;
+      }
+    });
+
+    function bootApp() {
+      if (!loadSavedState()) {
+        buildEmptyState();
+        saveState();
+      }
+      setScanBreakType('COLD');
+      const url = getGoogleSheetUrl();
+      if (url && url.includes('/exec')) {
+        updateSyncStatusUI('ok', isGoogleSheetAutoSyncEnabled() ? 'Auto-Sync Sheet: พร้อมทำงาน' : 'เชื่อมต่อ Sheet แล้ว');
+        pullDataFromGoogleSheet(true);
+      } else {
+        updateSyncStatusUI('idle', 'โหมด Local (เริ่มต้นใหม่ 0 ข้อมูล)');
+      }
+
+      updateClockAndLiveTimers();
+      renderAll();
+
+      setInterval(updateClockAndLiveTimers, 1000);
+      setInterval(() => pullDataFromGoogleSheet(true), AUTO_PULL_GOOGLE_SHEETS_MS);
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', bootApp);
+    } else {
+      bootApp();
+    }
+  </script>
+</body>
+</html>
